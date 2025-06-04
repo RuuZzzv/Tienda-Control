@@ -13,6 +13,8 @@ import 'features/inventory/screens/add_lote_screen.dart';
 import 'features/sales/screens/pos_screen.dart';
 import 'features/inventory/screens/inventory_screen.dart';
 import 'features/reports/screens/reports_screen.dart';
+import 'core/constants/app_colors.dart';
+import 'core/constants/app_sizes.dart';
 
 class TiendaControlApp extends StatelessWidget {
   const TiendaControlApp({super.key});
@@ -66,12 +68,7 @@ class TiendaControlApp extends StatelessWidget {
             vertical: AppSizes.paddingM,
           ),
           labelStyle: const TextStyle(fontSize: AppSizes.textL),
-          hintStyle: TextStyle(fontSize: AppSizes.textL, color: AppColors.textTertiary),
-        ),
-        cardTheme: CardTheme(
-          elevation: AppSizes.cardElevation,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.cardRadius)),
-          color: AppColors.cardBackground,
+          hintStyle: const TextStyle(fontSize: AppSizes.textL, color: AppColors.textTertiary),
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColors.primary,
