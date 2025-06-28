@@ -181,27 +181,27 @@ class ProductInventoryCard extends StatelessWidget {
                   ),
                   
                   // Precio de venta si existe
-                  if (product.precioVenta != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSizes.paddingS,
-                        vertical: AppSizes.paddingXS,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(AppSizes.containerRadius),
-                      ),
-                      child: Text(
-                        '\$${product.precioVenta!.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: AppSizes.textS,
-                          color: AppColors.success,
-                          fontWeight: FontWeight.w600,
-                        ),
+                  ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSizes.paddingS,
+                      vertical: AppSizes.paddingXS,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(AppSizes.containerRadius),
+                    ),
+                    child: Text(
+                      '\$${product.precioVenta.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: AppSizes.textS,
+                        color: AppColors.success,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(width: AppSizes.paddingS),
-                  ],
+                  ),
+                  const SizedBox(width: AppSizes.paddingS),
+                ],
                   
                   // Botón agregar lote
                   if (onAddLote != null)
