@@ -297,15 +297,15 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: AppColors.divider, width: 1),
+                  borderSide: const BorderSide(color: AppColors.divider, width: 1),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: AppColors.divider, width: 1),
+                  borderSide: const BorderSide(color: AppColors.divider, width: 1),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: AppColors.primary, width: 1),
+                  borderSide: const BorderSide(color: AppColors.primary, width: 1),
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 isDense: true,
@@ -429,14 +429,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.warning),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(Icons.warning, color: AppColors.warning, size: 24),
-                const SizedBox(width: 12),
+                Icon(Icons.warning, color: AppColors.warning, size: 24),
+                SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Estos productos necesitan reposición urgente',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: AppColors.warning,
@@ -495,14 +495,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.error),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(Icons.dangerous, color: AppColors.error, size: 24),
-                const SizedBox(width: 12),
+                Icon(Icons.dangerous, color: AppColors.error, size: 24),
+                SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Productos vencidos - Retirar de la venta',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: AppColors.error,
@@ -561,14 +561,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.accent),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(Icons.schedule, color: AppColors.accent, size: 24),
-                const SizedBox(width: 12),
+                Icon(Icons.schedule, color: AppColors.accent, size: 24),
+                SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Productos que vencen pronto - Ofertar',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: AppColors.accent,
@@ -852,7 +852,7 @@ class _BigStatCard extends StatelessWidget {
                 children: [
                   Icon(icon, size: 18, color: color),
                   if (onTap != null)
-                    Icon(Icons.arrow_forward_ios, size: 10, color: AppColors.textTertiary),
+                    const Icon(Icons.arrow_forward_ios, size: 10, color: AppColors.textTertiary),
                 ],
               ),
               // Número grande
@@ -1055,9 +1055,9 @@ class _SimpleProductCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Text(
+                        const Text(
                           'Stock: ',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             color: AppColors.textSecondary,
                           ),

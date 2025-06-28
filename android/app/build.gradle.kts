@@ -1,13 +1,12 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
     namespace = "com.example.tienda_control"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 34  // Usar la última versión estable
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -20,25 +19,59 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.tienda_control"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdk = 21  // Mínimo recomendado para mejor performance
+        targetSdk = 34  // Última versión estable
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        
+        // Optimizaciones para mejor performance
+        multiDexEnabled = true
+        
+        // Configuración de ProGuard para release
+        ndk {
+            abiFilters("armeabi-v7a", "arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {
+        debug {
+            // Mantener símbolos de debug pero optimizar
+            minifyEnabled = false
+            shrinkResources = false
+        }
+        
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Optimizaciones para release
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("debug")
         }
+    }
+    
+    // Optimizaciones de build
+    buildFeatures {
+        buildConfig = true
+    }
+    
+    packagingOptions {
+        exclude("META-INF/DEPENDENCIES")
+        exclude("META-INF/LICENSE")
+        exclude("META-INF/LICENSE.txt")
+        exclude("META-INF/NOTICE")
+        exclude("META-INF/NOTICE.txt")
     }
 }
 
 flutter {
     source = "../.."
+}
+
+// Configuración adicional de dependencias
+dependencies {
+    implementation("androidx.multidex:multidex:2.0.1")
 }

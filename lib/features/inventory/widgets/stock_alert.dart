@@ -287,7 +287,7 @@ class _AlertItem extends StatelessWidget {
                 ),
               ),
               if (onTap != null)
-                Icon(
+                const Icon(
                   Icons.arrow_forward_ios,
                   size: AppSizes.iconS,
                   color: AppColors.textTertiary,

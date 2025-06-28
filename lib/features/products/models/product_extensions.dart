@@ -11,10 +11,10 @@ extension ProductInventoryExtensions on Product {
   }
   
   /// Stock actual (valor por defecto si es null)
-  int get stockActualSafe => stockActual ?? 0;
+  int get stockActualSafe => stockActual;
   
   /// Stock mínimo (valor por defecto si es null)
-  int get stockMinimoSafe => stockMinimo ?? 0;
+  int get stockMinimoSafe => stockMinimo;
   
   /// Verifica si el producto tiene stock bajo
   bool get tieneStockBajo => stockActualSafe <= stockMinimoSafe;
