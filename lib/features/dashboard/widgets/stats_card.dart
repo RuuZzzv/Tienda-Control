@@ -1,4 +1,3 @@
-// lib/features/dashboard/widgets/stats_card.dart
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
@@ -45,16 +44,19 @@ class StatsCard extends StatelessWidget {
                     size: AppSizes.iconL,
                     color: color,
                   ),
-                  Container(
-                    padding: const EdgeInsets.all(AppSizes.paddingXS),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(AppSizes.containerRadius),
-                    ),
-                    child: Icon(
-                      Icons.trending_up,
-                      size: AppSizes.iconS,
-                      color: color,
+                  // Usar RepaintBoundary para el indicador animado
+                  RepaintBoundary(
+                    child: Container(
+                      padding: const EdgeInsets.all(AppSizes.paddingXS),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppSizes.containerRadius),
+                      ),
+                      child: Icon(
+                        Icons.trending_up,
+                        size: AppSizes.iconS,
+                        color: color,
+                      ),
                     ),
                   ),
                 ],

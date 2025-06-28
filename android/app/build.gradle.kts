@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.tienda_control"
-    compileSdk = 34  // Usar la última versión estable
+    compileSdk = flutter.compileSdkVersion
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -20,31 +20,32 @@ android {
 
     defaultConfig {
         applicationId = "com.example.tienda_control"
-        minSdk = 21  // Mínimo recomendado para mejor performance
-        targetSdk = 34  // Última versión estable
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         
-        // Optimizaciones para mejor performance
+        // Habilitar multidex para evitar problemas con métodos
         multiDexEnabled = true
         
-        // Configuración de ProGuard para release
+        // Configuración de NDK
         ndk {
-            abiFilters("armeabi-v7a", "arm64-v8a", "x86_64")
+            // Filtrar arquitecturas para reducir tamaño del APK
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
     }
 
     buildTypes {
         debug {
-            // Mantener símbolos de debug pero optimizar
-            minifyEnabled = false
-            shrinkResources = false
+            // Debug sin optimizaciones para desarrollo rápido
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
         
         release {
-            // Optimizaciones para release
-            minifyEnabled = true
-            shrinkResources = true
+            // Release con optimizaciones
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -53,17 +54,17 @@ android {
         }
     }
     
-    // Optimizaciones de build
-    buildFeatures {
-        buildConfig = true
-    }
-    
+    // Configuración de empaquetado
     packagingOptions {
-        exclude("META-INF/DEPENDENCIES")
-        exclude("META-INF/LICENSE")
-        exclude("META-INF/LICENSE.txt")
-        exclude("META-INF/NOTICE")
-        exclude("META-INF/NOTICE.txt")
+        resources {
+            excludes += listOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt"
+            )
+        }
     }
 }
 
@@ -71,7 +72,6 @@ flutter {
     source = "../.."
 }
 
-// Configuración adicional de dependencias
 dependencies {
     implementation("androidx.multidex:multidex:2.0.1")
 }

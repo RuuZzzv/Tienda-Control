@@ -1,4 +1,3 @@
-// lib/features/products/providers/products_provider.dart
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../models/lote.dart';
@@ -12,48 +11,78 @@ class ProductsProvider extends ChangeNotifier {
   List<Categoria> _categorias = [];
   bool _isLoading = false;
   String? _error;
+  bool _isInitialized = false;
+  
+  // Cache para búsquedas y filtros
+  Map<String, List<Product>> _searchCache = {};
+  List<Product>? _cachedLowStockProducts;
 
   // Getters
   List<Product> get products => _products;
   List<Categoria> get categorias => _categorias;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get isInitialized => _isInitialized;
 
-  // Cargar productos
-  Future<void> loadProducts() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final db = await _dbHelper.database;
-      
-      // Cargar productos con información de stock y categoría
-      final result = await db.rawQuery('''
-        SELECT 
-          p.*,
-          c.nombre as categoria_nombre,
-          COALESCE(SUM(l.cantidad_actual), 0) as stock_actual
-        FROM productos p
-        LEFT JOIN categorias c ON p.categoria_id = c.id
-        LEFT JOIN lotes l ON p.id = l.producto_id AND l.activo = 1
-        WHERE p.activo = 1
-        GROUP BY p.id, p.nombre, c.nombre
-        ORDER BY p.nombre
-      ''');
-
-      _products = result.map((map) => Product.fromMap(map)).toList();
-      
-    } catch (e) {
-      _error = 'Error al cargar productos: $e';
-      print('Products error: $e');
-    } finally {
-      _isLoading = false;
+  // Inicializar solo cuando sea necesario
+  Future<void> initializeIfNeeded() async {
+    if (!_isInitialized) {
+      await _loadDataWithoutNotify();
+      _isInitialized = true;
       notifyListeners();
     }
   }
 
-  // Cargar categorías
+  // Método privado para cargar datos sin notificar
+  Future<void> _loadDataWithoutNotify() async {
+    if (_isLoading) return;
+    
+    _isLoading = true;
+    _error = null;
+
+    try {
+      final db = await _dbHelper.database;
+      
+      // Cargar productos y categorías en paralelo
+      final results = await Future.wait([
+        db.rawQuery('''
+          SELECT 
+            p.*,
+            c.nombre as categoria_nombre,
+            COALESCE(SUM(l.cantidad_actual), 0) as stock_actual
+          FROM productos p
+          LEFT JOIN categorias c ON p.categoria_id = c.id
+          LEFT JOIN lotes l ON p.id = l.producto_id AND l.activo = 1
+          WHERE p.activo = 1
+          GROUP BY p.id, p.nombre, c.nombre
+          ORDER BY p.nombre
+        '''),
+        db.query('categorias', orderBy: 'nombre'),
+      ]);
+
+      _products = (results[0] as List).map((map) => Product.fromMap(map)).toList();
+      _categorias = (results[1] as List).map((map) => Categoria.fromMap(map)).toList();
+      
+      // Limpiar cache
+      _clearCache();
+      
+    } catch (e) {
+      _error = 'Error al cargar productos: $e';
+      print('Products error: $e');
+      _products = [];
+      _categorias = [];
+    } finally {
+      _isLoading = false;
+    }
+  }
+
+  // Cargar productos con notificación
+  Future<void> loadProducts() async {
+    await _loadDataWithoutNotify();
+    notifyListeners();
+  }
+
+  // Cargar categorías por separado si es necesario
   Future<void> loadCategorias() async {
     try {
       final db = await _dbHelper.database;
@@ -65,7 +94,7 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  // MÉTODO COMBINADO PARA AGREGAR PRODUCTO CON LOTE INICIAL - CORREGIDO
+  // Agregar producto con stock inicial - optimizado
   Future<bool> addProductWithInitialStock({
     required Product product,
     String? numeroLote,
@@ -74,16 +103,12 @@ class ProductsProvider extends ChangeNotifier {
   }) async {
     try {
       final db = await _dbHelper.database;
-      
-      // GENERAR CÓDIGOS ANTES DE LA TRANSACCIÓN
       final codigoInterno = await _generateCodigoInterno();
       
-      // Iniciar transacción para asegurar consistencia
       bool success = false;
       int? productId;
       
       await db.transaction((txn) async {
-        // 1. Insertar producto
         final productWithCode = product.copyWith(
           codigoInterno: codigoInterno,
           fechaCreacion: DateTime.now(),
@@ -92,9 +117,7 @@ class ProductsProvider extends ChangeNotifier {
 
         productId = await txn.insert('productos', productWithCode.toMap());
 
-        // 2. Insertar lote inicial si se especificó cantidad
         if (cantidadInicial > 0 && productId != null) {
-          // GENERAR CÓDIGO DE LOTE DENTRO DE LA TRANSACCIÓN
           final codigoLoteInterno = await _generateCodigoLoteInternoInTransaction(txn, productId!);
           
           final lote = Lote(
@@ -113,8 +136,8 @@ class ProductsProvider extends ChangeNotifier {
       });
 
       if (success) {
-        // Recargar productos
-        await loadProducts();
+        await _loadDataWithoutNotify();
+        notifyListeners();
         return true;
       }
       
@@ -128,12 +151,10 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  // Agregar producto simple - MÉTODO CORREGIDO
+  // Agregar producto simple - optimizado
   Future<int?> addProduct(Product product) async {
     try {
       final db = await _dbHelper.database;
-      
-      // Generar código interno automático
       final codigoInterno = await _generateCodigoInterno();
       
       final productWithCode = product.copyWith(
@@ -142,13 +163,12 @@ class ProductsProvider extends ChangeNotifier {
         fechaActualizacion: DateTime.now(),
       );
 
-      // CAPTURAR EL ID DEL PRODUCTO INSERTADO
       final productId = await db.insert('productos', productWithCode.toMap());
       
-      // Recargar productos
-      await loadProducts();
+      await _loadDataWithoutNotify();
+      notifyListeners();
       
-      return productId; // Devolver el ID del producto creado
+      return productId;
     } catch (e) {
       _error = 'Error al agregar producto: $e';
       print('Error en addProduct: $e');
@@ -157,23 +177,21 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  // Agregar lote a un producto - MÉTODO CORREGIDO
+  // Agregar lote - optimizado
   Future<bool> addLote(int productoId, Lote lote) async {
     try {
       final db = await _dbHelper.database;
-      
-      // Generar código de lote interno
       final codigoLoteInterno = await _generateCodigoLoteInterno(productoId);
       
       final loteWithCode = lote.copyWith(
-        productoId: productoId, // Asegurar que tiene el ID correcto
+        productoId: productoId,
         codigoLoteInterno: codigoLoteInterno,
       );
 
       await db.insert('lotes', loteWithCode.toMap());
       
-      // Recargar productos para actualizar stock
-      await loadProducts();
+      await _loadDataWithoutNotify();
+      notifyListeners();
       
       return true;
     } catch (e) {
@@ -184,7 +202,7 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  // Actualizar producto
+  // Actualizar producto - optimizado
   Future<bool> updateProduct(Product product) async {
     try {
       final db = await _dbHelper.database;
@@ -200,7 +218,8 @@ class ProductsProvider extends ChangeNotifier {
         whereArgs: [product.id],
       );
       
-      await loadProducts();
+      await _loadDataWithoutNotify();
+      notifyListeners();
       return true;
     } catch (e) {
       _error = 'Error al actualizar producto: $e';
@@ -209,7 +228,7 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  // Eliminar producto (marcarlo como inactivo)
+  // Eliminar producto - optimizado
   Future<bool> deleteProduct(int productId) async {
     try {
       final db = await _dbHelper.database;
@@ -221,7 +240,8 @@ class ProductsProvider extends ChangeNotifier {
         whereArgs: [productId],
       );
       
-      await loadProducts();
+      await _loadDataWithoutNotify();
+      notifyListeners();
       return true;
     } catch (e) {
       _error = 'Error al eliminar producto: $e';
@@ -230,22 +250,40 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  // Buscar productos
-  Future<List<Product>> searchProducts(String query) async {
+  // Buscar productos con cache
+  List<Product> searchProducts(String query) {
     if (query.isEmpty) return _products;
     
+    // Verificar cache
+    if (_searchCache.containsKey(query)) {
+      return _searchCache[query]!;
+    }
+    
     final lowercaseQuery = query.toLowerCase();
-    return _products.where((product) {
+    final results = _products.where((product) {
       return product.nombre.toLowerCase().contains(lowercaseQuery) ||
              product.descripcion?.toLowerCase().contains(lowercaseQuery) == true ||
              product.codigoBarras?.contains(query) == true ||
              product.codigoInterno?.contains(query) == true;
     }).toList();
+    
+    // Guardar en cache (máximo 10 búsquedas)
+    if (_searchCache.length >= 10) {
+      _searchCache.remove(_searchCache.keys.first);
+    }
+    _searchCache[query] = results;
+    
+    return results;
   }
 
-  // Obtener productos con stock bajo
+  // Obtener productos con stock bajo - con cache
   List<Product> getProductsWithLowStock() {
-    return _products.where((product) => product.tieneStockBajo).toList();
+    if (_cachedLowStockProducts != null) {
+      return _cachedLowStockProducts!;
+    }
+    
+    _cachedLowStockProducts = _products.where((product) => product.tieneStockBajo).toList();
+    return _cachedLowStockProducts!;
   }
 
   // Obtener lotes de un producto
@@ -266,7 +304,7 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  // Generar código interno automático - SIN TRANSACCIÓN
+  // Generar código interno automático
   Future<String> _generateCodigoInterno() async {
     try {
       final db = await _dbHelper.database;
@@ -279,7 +317,7 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  // Generar código de lote interno - SIN TRANSACCIÓN
+  // Generar código de lote interno
   Future<String> _generateCodigoLoteInterno(int productoId) async {
     try {
       final db = await _dbHelper.database;
@@ -295,7 +333,7 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  // Generar código de lote interno DENTRO DE TRANSACCIÓN
+  // Generar código de lote interno en transacción
   Future<String> _generateCodigoLoteInternoInTransaction(dynamic txn, int productoId) async {
     try {
       final result = await txn.rawQuery(
@@ -310,17 +348,28 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
+  // Limpiar cache
+  void _clearCache() {
+    _searchCache.clear();
+    _cachedLowStockProducts = null;
+  }
+
   // Refrescar datos
   Future<void> refresh() async {
-    await Future.wait([
-      loadProducts(),
-      loadCategorias(),
-    ]);
+    await loadProducts();
   }
 
   // Limpiar errores
   void clearError() {
-    _error = null;
-    notifyListeners();
+    if (_error != null) {
+      _error = null;
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _clearCache();
+    super.dispose();
   }
 }

@@ -1,4 +1,3 @@
-// lib/features/dashboard/screens/dashboard_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -24,15 +23,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    // Cargar datos después del primer frame para evitar rebuilds durante la construcción
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<DashboardProvider>().loadDashboardData();
+      if (mounted) {
+        context.read<DashboardProvider>().loadDashboardData();
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<LanguageProvider>(
-      builder: (context, languageProvider, child) {
+    // Usar Selector para evitar rebuilds innecesarios
+    return Selector<LanguageProvider, String>(
+      selector: (_, provider) => provider.currentLanguage,
+      builder: (context, currentLanguage, child) {
+        final languageProvider = context.read<LanguageProvider>();
+        
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
@@ -51,157 +57,245 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-          body: Consumer<DashboardProvider>(
-            builder: (context, provider, child) {
-              if (provider.isLoading) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const CircularProgressIndicator(
-                        strokeWidth: 6,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(height: AppSizes.paddingM),
-                      Text(
-                        languageProvider.translate('loading_data'),
-                        style: const TextStyle(
-                          fontSize: AppSizes.textL,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              if (provider.error != null) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSizes.paddingL),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          size: AppSizes.iconXXL,
-                          color: AppColors.error,
-                        ),
-                        const SizedBox(height: AppSizes.paddingM),
-                        Text(
-                          languageProvider.translate('error_loading_data'),
-                          style: const TextStyle(
-                            fontSize: AppSizes.textXL,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSizes.paddingS),
-                        Text(
-                          provider.error!,
-                          style: const TextStyle(
-                            fontSize: AppSizes.textM,
-                            color: AppColors.textSecondary,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: AppSizes.paddingL),
-                        ElevatedButton.icon(
-                          onPressed: () => provider.refresh(),
-                          icon: const Icon(Icons.refresh),
-                          label: Text(languageProvider.translate('retry')),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: AppColors.textOnPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              final stats = provider.stats;
-              if (stats == null) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.analytics_outlined,
-                        size: AppSizes.iconXXL,
-                        color: AppColors.textTertiary,
-                      ),
-                      const SizedBox(height: AppSizes.paddingM),
-                      Text(
-                        languageProvider.translate('no_data_available'),
-                        style: const TextStyle(
-                          fontSize: AppSizes.textXL,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: AppSizes.paddingS),
-                      Text(
-                        languageProvider.translate('try_refresh'),
-                        style: const TextStyle(
-                          fontSize: AppSizes.textM,
-                          color: AppColors.textTertiary,
-                        ),
-                      ),
-                      const SizedBox(height: AppSizes.paddingL),
-                      ElevatedButton.icon(
-                        onPressed: () => provider.forceReload(),
-                        icon: const Icon(Icons.refresh),
-                        label: Text(languageProvider.translate('reload')),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: AppColors.textOnPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              return RefreshIndicator(
-                onRefresh: provider.refresh,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(AppSizes.paddingM),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildGreeting(languageProvider),
-                      const SizedBox(height: AppSizes.sectionSpacing),
-
-                      const LanguageSelector(),
-                      const SizedBox(height: AppSizes.sectionSpacing),
-
-                      _buildStatsSection(stats, languageProvider),
-                      const SizedBox(height: AppSizes.sectionSpacing),
-
-                      QuickActionsWidget(languageProvider: languageProvider),
-                      const SizedBox(height: AppSizes.sectionSpacing),
-
-                      RecentSalesWidget(
-                        ventasRecientes: stats.ventasRecientes,
-                        languageProvider: languageProvider,
-                      ),
-                      
-                      const SizedBox(height: AppSizes.paddingXL),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+          body: _DashboardBody(languageProvider: languageProvider),
         );
       },
     );
   }
 
-  Widget _buildGreeting(LanguageProvider languageProvider) {
+  void _showNotifications(BuildContext context, LanguageProvider languageProvider) {
+    final provider = context.read<DashboardProvider>();
+    
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => _NotificationsSheet(
+        languageProvider: languageProvider,
+        dashboardProvider: provider,
+      ),
+    );
+  }
+}
+
+// Separar el body en un widget para optimizar rebuilds
+class _DashboardBody extends StatelessWidget {
+  final LanguageProvider languageProvider;
+
+  const _DashboardBody({
+    required this.languageProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<DashboardProvider, ({bool isLoading, String? error, DashboardStats? stats})>(
+      selector: (_, provider) => (
+        isLoading: provider.isLoading,
+        error: provider.error,
+        stats: provider.stats,
+      ),
+      builder: (context, data, child) {
+        if (data.isLoading) {
+          return _LoadingWidget(languageProvider: languageProvider);
+        }
+
+        if (data.error != null) {
+          return _ErrorWidget(
+            error: data.error!,
+            languageProvider: languageProvider,
+          );
+        }
+
+        final stats = data.stats;
+        if (stats == null) {
+          return _NoDataWidget(languageProvider: languageProvider);
+        }
+
+        return RefreshIndicator(
+          onRefresh: context.read<DashboardProvider>().refresh,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(AppSizes.paddingM),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _GreetingCard(languageProvider: languageProvider),
+                const SizedBox(height: AppSizes.sectionSpacing),
+
+                const LanguageSelector(),
+                const SizedBox(height: AppSizes.sectionSpacing),
+
+                _StatsSection(stats: stats, languageProvider: languageProvider),
+                const SizedBox(height: AppSizes.sectionSpacing),
+
+                QuickActionsWidget(languageProvider: languageProvider),
+                const SizedBox(height: AppSizes.sectionSpacing),
+
+                RecentSalesWidget(
+                  ventasRecientes: stats.ventasRecientes,
+                  languageProvider: languageProvider,
+                ),
+                
+                const SizedBox(height: AppSizes.paddingXL),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Widget de carga optimizado
+class _LoadingWidget extends StatelessWidget {
+  final LanguageProvider languageProvider;
+
+  const _LoadingWidget({
+    required this.languageProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(
+            strokeWidth: 6,
+            color: AppColors.primary,
+          ),
+          const SizedBox(height: AppSizes.paddingM),
+          Text(
+            languageProvider.translate('loading_data'),
+            style: const TextStyle(
+              fontSize: AppSizes.textL,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Widget de error optimizado
+class _ErrorWidget extends StatelessWidget {
+  final String error;
+  final LanguageProvider languageProvider;
+
+  const _ErrorWidget({
+    required this.error,
+    required this.languageProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSizes.paddingL),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: AppSizes.iconXXL,
+              color: AppColors.error,
+            ),
+            const SizedBox(height: AppSizes.paddingM),
+            Text(
+              languageProvider.translate('error_loading_data'),
+              style: const TextStyle(
+                fontSize: AppSizes.textXL,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: AppSizes.paddingS),
+            Text(
+              error,
+              style: const TextStyle(
+                fontSize: AppSizes.textM,
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSizes.paddingL),
+            ElevatedButton.icon(
+              onPressed: () => context.read<DashboardProvider>().refresh(),
+              icon: const Icon(Icons.refresh),
+              label: Text(languageProvider.translate('retry')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.textOnPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Widget sin datos optimizado
+class _NoDataWidget extends StatelessWidget {
+  final LanguageProvider languageProvider;
+
+  const _NoDataWidget({
+    required this.languageProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.analytics_outlined,
+            size: AppSizes.iconXXL,
+            color: AppColors.textTertiary,
+          ),
+          const SizedBox(height: AppSizes.paddingM),
+          Text(
+            languageProvider.translate('no_data_available'),
+            style: const TextStyle(
+              fontSize: AppSizes.textXL,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSizes.paddingS),
+          Text(
+            languageProvider.translate('try_refresh'),
+            style: const TextStyle(
+              fontSize: AppSizes.textM,
+              color: AppColors.textTertiary,
+            ),
+          ),
+          const SizedBox(height: AppSizes.paddingL),
+          ElevatedButton.icon(
+            onPressed: () => context.read<DashboardProvider>().forceReload(),
+            icon: const Icon(Icons.refresh),
+            label: Text(languageProvider.translate('reload')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.textOnPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Greeting card como widget separado
+class _GreetingCard extends StatelessWidget {
+  final LanguageProvider languageProvider;
+
+  const _GreetingCard({
+    required this.languageProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final hour = DateTime.now().hour;
     String greetingKey;
 
@@ -257,8 +351,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (hour < 18) return Icons.wb_sunny_outlined;
     return Icons.nights_stay;
   }
+}
 
-  Widget _buildStatsSection(DashboardStats stats, LanguageProvider languageProvider) {
+// Sección de estadísticas como widget separado
+class _StatsSection extends StatelessWidget {
+  final DashboardStats stats;
+  final LanguageProvider languageProvider;
+
+  const _StatsSection({
+    required this.stats,
+    required this.languageProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -328,63 +434,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ],
     );
   }
+}
 
-  void _showNotifications(BuildContext context, LanguageProvider languageProvider) {
-    final provider = context.read<DashboardProvider>();
-    
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(AppSizes.paddingL),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  languageProvider.translate('notifications'),
-                  style: const TextStyle(
-                    fontSize: AppSizes.textXL,
-                    fontWeight: FontWeight.bold,
-                  ),
+// Sheet de notificaciones como widget separado
+class _NotificationsSheet extends StatelessWidget {
+  final LanguageProvider languageProvider;
+  final DashboardProvider dashboardProvider;
+
+  const _NotificationsSheet({
+    required this.languageProvider,
+    required this.dashboardProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSizes.paddingL),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                languageProvider.translate('notifications'),
+                style: const TextStyle(
+                  fontSize: AppSizes.textXL,
+                  fontWeight: FontWeight.bold,
                 ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSizes.paddingM),
-            
-            if (provider.tieneAlertas) ...[
-              ListTile(
-                leading: const Icon(Icons.warning, color: AppColors.warning),
-                title: Text(languageProvider.translate('low_stock')),
-                subtitle: Text(provider.mensajeAlerta),
-                onTap: () {
-                  Navigator.pop(context);
-                  context.go('/inventory');
-                },
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
               ),
             ],
-            
+          ),
+          const SizedBox(height: AppSizes.paddingM),
+          
+          if (dashboardProvider.tieneAlertas) ...[
             ListTile(
-              leading: const Icon(Icons.check_circle, color: AppColors.success),
-              title: Text(languageProvider.translate('system_working')),
-              subtitle: Text(languageProvider.translate('store_ready')),
-            ),
-            
-            const SizedBox(height: AppSizes.paddingL),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(languageProvider.translate('close')),
-              ),
+              leading: const Icon(Icons.warning, color: AppColors.warning),
+              title: Text(languageProvider.translate('low_stock')),
+              subtitle: Text(dashboardProvider.mensajeAlerta),
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/inventory');
+              },
             ),
           ],
-        ),
+          
+          ListTile(
+            leading: const Icon(Icons.check_circle, color: AppColors.success),
+            title: Text(languageProvider.translate('system_working')),
+            subtitle: Text(languageProvider.translate('store_ready')),
+          ),
+          
+          const SizedBox(height: AppSizes.paddingL),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(languageProvider.translate('close')),
+            ),
+          ),
+        ],
       ),
     );
   }

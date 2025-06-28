@@ -1,4 +1,3 @@
-// lib/features/dashboard/providers/dashboard_provider.dart
 import 'package:flutter/material.dart';
 import '../models/dashboard_stats.dart';
 import '../../../core/database/database_helper.dart';
@@ -10,12 +9,25 @@ class DashboardProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   bool _databaseRepaired = false;
+  bool _isInitialized = false;
 
   DashboardStats? get stats => _stats;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get isInitialized => _isInitialized;
+
+  // IMPORTANTE: Solo cargar datos cuando sea necesario
+  Future<void> initializeIfNeeded() async {
+    if (!_isInitialized) {
+      await loadDashboardData();
+      _isInitialized = true;
+    }
+  }
 
   Future<void> loadDashboardData() async {
+    // Evitar notificaciones múltiples
+    if (_isLoading) return;
+    
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -74,6 +86,7 @@ class DashboardProvider extends ChangeNotifier {
 
   Future<void> forceReload() async {
     _databaseRepaired = false;
+    _isInitialized = false;
     await loadDashboardData();
   }
 
@@ -102,14 +115,5 @@ class DashboardProvider extends ChangeNotifier {
     
     final cantidad = _stats!.productosStockBajo;
     return '$cantidad ${cantidad == 1 ? 'producto tiene' : 'productos tienen'} stock bajo';
-  }
-
-  Map<String, dynamic> get debugInfo {
-    return {
-      'stats': _stats?.toString() ?? 'null',
-      'isLoading': _isLoading,
-      'error': _error ?? 'none',
-      'databaseRepaired': _databaseRepaired,
-    };
   }
 }

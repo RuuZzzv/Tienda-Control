@@ -1,4 +1,3 @@
-// lib/features/dashboard/widgets/recent_sales.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/dashboard_stats.dart';
@@ -21,42 +20,46 @@ class RecentSalesWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              languageProvider.translate('recent_sales'),
-              style: const TextStyle(
-                fontSize: AppSizes.textXL,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            if (ventasRecientes.isNotEmpty)
-              TextButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Próximamente: Historial de ventas'),
-                    ),
-                  );
-                },
-                child: Text(
-                  languageProvider.translate('view_all'),
-                  style: const TextStyle(
-                    fontSize: AppSizes.textM,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-          ],
-        ),
+        _buildHeader(context),
         const SizedBox(height: AppSizes.paddingM),
         
         if (ventasRecientes.isEmpty)
           _buildEmptyState()
         else
           _buildSalesList(),
+      ],
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          languageProvider.translate('recent_sales'),
+          style: const TextStyle(
+            fontSize: AppSizes.textXL,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        if (ventasRecientes.isNotEmpty)
+          TextButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Próximamente: Historial de ventas'),
+                ),
+              );
+            },
+            child: Text(
+              languageProvider.translate('view_all'),
+              style: const TextStyle(
+                fontSize: AppSizes.textM,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -98,27 +101,19 @@ class RecentSalesWidget extends StatelessWidget {
 
   Widget _buildSalesList() {
     return Card(
-      child: Column(
-        children: ventasRecientes.asMap().entries.map((entry) {
-          final index = entry.key;
-          final venta = entry.value;
-          final isLast = index == ventasRecientes.length - 1;
-          
-          return Column(
-            children: [
-              _SaleItem(
-                venta: venta,
-                languageProvider: languageProvider,
-              ),
-              if (!isLast)
-                const Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: AppColors.divider,
-                ),
-            ],
-          );
-        }).toList(),
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: ventasRecientes.length,
+        separatorBuilder: (context, index) => const Divider(
+          height: 1,
+          thickness: 1,
+          color: AppColors.divider,
+        ),
+        itemBuilder: (context, index) => _SaleItem(
+          venta: ventasRecientes[index],
+          languageProvider: languageProvider,
+        ),
       ),
     );
   }
@@ -139,21 +134,25 @@ class _SaleItem extends StatelessWidget {
       padding: const EdgeInsets.all(AppSizes.paddingM),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(AppSizes.paddingS),
-            decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(AppSizes.containerRadius),
-            ),
-            child: const Icon(
-              Icons.point_of_sale,
-              size: AppSizes.iconM,
-              color: AppColors.success,
+          // Icono con RepaintBoundary
+          RepaintBoundary(
+            child: Container(
+              padding: const EdgeInsets.all(AppSizes.paddingS),
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppSizes.containerRadius),
+              ),
+              child: const Icon(
+                Icons.point_of_sale,
+                size: AppSizes.iconM,
+                color: AppColors.success,
+              ),
             ),
           ),
           
           const SizedBox(width: AppSizes.paddingM),
           
+          // Información principal
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,14 +177,12 @@ class _SaleItem extends StatelessWidget {
             ),
           ),
           
+          // Información de precio
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                NumberFormat.currency(
-                  locale: 'es_CO',
-                  symbol: '\$',
-                ).format(venta.total),
+                _formatCurrency(venta.total),
                 style: const TextStyle(
                   fontSize: AppSizes.textL,
                   fontWeight: FontWeight.bold,
@@ -217,6 +214,13 @@ class _SaleItem extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatCurrency(double amount) {
+    return NumberFormat.currency(
+      locale: 'es_CO',
+      symbol: '\$',
+    ).format(amount);
   }
 
   String _formatFecha(DateTime fecha) {

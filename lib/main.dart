@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'app.dart';
 import 'features/dashboard/providers/dashboard_provider.dart';
@@ -10,64 +9,41 @@ import 'core/providers/language_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Optimización: Cargar solo lo necesario al inicio
-  final languageProvider = LanguageProvider();
+  // NO habilitar esto en producción - causa lag extremo
+  // debugPrintRebuildDirtyWidgets = true;
   
-  // Cargar idioma en paralelo mientras se inicia la app
-  final loadLanguageFuture = languageProvider.loadSavedLanguage();
-  
-  runApp(MyApp(
-    languageProvider: languageProvider,
-    loadLanguageFuture: loadLanguageFuture,
-  ));
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final LanguageProvider languageProvider;
-  final Future<void> loadLanguageFuture;
-  
-  const MyApp({
-    super.key, 
-    required this.languageProvider,
-    required this.loadLanguageFuture,
-  });
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-      future: loadLanguageFuture,
-      builder: (context, snapshot) {
-        // Mostrar splash mientras carga
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const MaterialApp(
-            home: Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
-            ),
-          );
-        }
-        
-        return MultiProvider(
-          providers: [
-            // Lazy loading de providers - solo se crean cuando se necesitan
-            ChangeNotifierProvider(
-              create: (_) => DashboardProvider(),
-              lazy: true,
-            ),
-            ChangeNotifierProvider(
-              create: (_) => ProductsProvider(),
-              lazy: true,
-            ),
-            ChangeNotifierProvider(
-              create: (_) => InventoryProvider(),
-              lazy: true,
-            ),
-            ChangeNotifierProvider.value(value: languageProvider),
-          ],
-          child: const TiendaControlApp(),
-        );
-      },
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => DashboardProvider(),
+          lazy: false, // Cargar inmediatamente para debug
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ProductsProvider(),
+          lazy: true,
+        ),
+        ChangeNotifierProvider(
+          create: (_) => InventoryProvider(),
+          lazy: true,
+        ),
+        ChangeNotifierProvider(
+          create: (_) {
+            final provider = LanguageProvider();
+            provider.loadSavedLanguage(); // No await para no bloquear
+            return provider;
+          },
+          lazy: false,
+        ),
+      ],
+      child: const TiendaControlApp(),
     );
   }
 }

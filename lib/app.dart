@@ -3,17 +3,15 @@ import 'package:go_router/go_router.dart';
 import 'core/constants/app_colors.dart';
 import 'core/constants/app_sizes.dart';
 import 'core/widgets/main_scaffold.dart';
+import 'features/dashboard/screens/dashboard_screen.dart';
+import 'features/products/screens/products_list_screen.dart';
+import 'features/products/screens/add_product_screen.dart';
+import 'features/products/screens/edit_product_screen.dart';
 import 'features/products/models/product.dart';
-
-// Lazy imports para mejorar tiempo de carga inicial
-import 'features/dashboard/screens/dashboard_screen.dart' deferred as dashboard;
-import 'features/products/screens/products_list_screen.dart' deferred as products_list;
-import 'features/products/screens/add_product_screen.dart' deferred as add_product;
-import 'features/products/screens/edit_product_screen.dart' deferred as edit_product;
-import 'features/inventory/screens/add_lote_screen.dart' deferred as add_lote;
-import 'features/sales/screens/pos_screen.dart' deferred as pos;
-import 'features/inventory/screens/inventory_screen.dart' deferred as inventory;
-import 'features/reports/screens/reports_screen.dart' deferred as reports;
+import 'features/inventory/screens/add_lote_screen.dart';
+import 'features/sales/screens/pos_screen.dart';
+import 'features/inventory/screens/inventory_screen.dart';
+import 'features/reports/screens/reports_screen.dart';
 
 class TiendaControlApp extends StatelessWidget {
   const TiendaControlApp({super.key});
@@ -36,7 +34,13 @@ class TiendaControlApp extends StatelessWidget {
         surface: AppColors.background,
       ),
       useMaterial3: true,
-      // Optimización: Usar fuentes del sistema por defecto
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          // Usar transiciones más simples para mejor performance
+          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       textTheme: const TextTheme(
         displayLarge: TextStyle(fontSize: AppSizes.textDisplay, fontWeight: FontWeight.bold),
         displayMedium: TextStyle(fontSize: AppSizes.textXXL, fontWeight: FontWeight.bold),
@@ -93,64 +97,8 @@ class TiendaControlApp extends StatelessWidget {
   }
 }
 
-// Widget de carga para lazy loading
-class LoadingScreen extends StatelessWidget {
-  const LoadingScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
-  }
-}
-
-// Helpers para lazy loading
-Future<Widget> _loadDashboard() async {
-  await dashboard.loadLibrary();
-  return dashboard.DashboardScreen();
-}
-
-Future<Widget> _loadProductsList() async {
-  await products_list.loadLibrary();
-  return products_list.ProductsListScreen();
-}
-
-Future<Widget> _loadPOS() async {
-  await pos.loadLibrary();
-  return pos.POSScreen();
-}
-
-Future<Widget> _loadInventory() async {
-  await inventory.loadLibrary();
-  return inventory.InventoryScreen();
-}
-
-Future<Widget> _loadReports() async {
-  await reports.loadLibrary();
-  return reports.ReportsScreen();
-}
-
-Future<Widget> _loadAddProduct() async {
-  await add_product.loadLibrary();
-  return add_product.AddProductScreen();
-}
-
-Future<Widget> _loadEditProduct(Product product) async {
-  await edit_product.loadLibrary();
-  return edit_product.EditProductScreen(product: product);
-}
-
-Future<Widget> _loadAddLote(Product? product) async {
-  await add_lote.loadLibrary();
-  return add_lote.AddLoteScreen(preselectedProduct: product);
-}
-
 final GoRouter _router = GoRouter(
   initialLocation: '/dashboard',
-  // Optimización: Usar caché de rutas
   debugLogDiagnostics: false,
   routes: [
     ShellRoute(
@@ -169,99 +117,45 @@ final GoRouter _router = GoRouter(
         ),
         GoRoute(
           path: '/dashboard',
-          builder: (context, state) => FutureBuilder<Widget>(
-            future: _loadDashboard(),
-            builder: (context, snapshot) {
-              if (snapshot.hasData) return snapshot.data!;
-              return const LoadingScreen();
-            },
-          ),
+          builder: (context, state) => const DashboardScreen(),
         ),
         GoRoute(
           path: '/products',
-          builder: (context, state) => FutureBuilder<Widget>(
-            future: _loadProductsList(),
-            builder: (context, snapshot) {
-              if (snapshot.hasData) return snapshot.data!;
-              return const LoadingScreen();
-            },
-          ),
+          builder: (context, state) => const ProductsListScreen(),
         ),
         GoRoute(
           path: '/pos',
-          builder: (context, state) => FutureBuilder<Widget>(
-            future: _loadPOS(),
-            builder: (context, snapshot) {
-              if (snapshot.hasData) return snapshot.data!;
-              return const LoadingScreen();
-            },
-          ),
+          builder: (context, state) => const POSScreen(),
         ),
         GoRoute(
           path: '/inventory',
-          builder: (context, state) => FutureBuilder<Widget>(
-            future: _loadInventory(),
-            builder: (context, snapshot) {
-              if (snapshot.hasData) return snapshot.data!;
-              return const LoadingScreen();
-            },
-          ),
+          builder: (context, state) => const InventoryScreen(),
         ),
         GoRoute(
           path: '/reports',
-          builder: (context, state) => FutureBuilder<Widget>(
-            future: _loadReports(),
-            builder: (context, snapshot) {
-              if (snapshot.hasData) return snapshot.data!;
-              return const LoadingScreen();
-            },
-          ),
+          builder: (context, state) => const ReportsScreen(),
         ),
       ],
     ),
     GoRoute(
       path: '/add-product',
-      builder: (context, state) => FutureBuilder<Widget>(
-        future: _loadAddProduct(),
-        builder: (context, snapshot) {
-          if (snapshot.hasData) return snapshot.data!;
-          return const LoadingScreen();
-        },
-      ),
+      builder: (context, state) => const AddProductScreen(),
     ),
     GoRoute(
       path: '/edit-product',
       builder: (context, state) {
         final product = state.extra as Product?;
         if (product == null) {
-          return FutureBuilder<Widget>(
-            future: _loadProductsList(),
-            builder: (context, snapshot) {
-              if (snapshot.hasData) return snapshot.data!;
-              return const LoadingScreen();
-            },
-          );
+          return const ProductsListScreen();
         }
-        return FutureBuilder<Widget>(
-          future: _loadEditProduct(product),
-          builder: (context, snapshot) {
-            if (snapshot.hasData) return snapshot.data!;
-            return const LoadingScreen();
-          },
-        );
+        return EditProductScreen(product: product);
       },
     ),
     GoRoute(
       path: '/add-lote',
       builder: (context, state) {
         final product = state.extra as Product?;
-        return FutureBuilder<Widget>(
-          future: _loadAddLote(product),
-          builder: (context, snapshot) {
-            if (snapshot.hasData) return snapshot.data!;
-            return const LoadingScreen();
-          },
-        );
+        return AddLoteScreen(preselectedProduct: product);
       },
     ),
   ],
