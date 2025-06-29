@@ -3,8 +3,51 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
 
+// Datos estáticos de los reportes para evitar recrearlos
+class _ReportData {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final String description;
+  
+  const _ReportData({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.description,
+  });
+}
+
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
+  
+  // Lista estática de reportes disponibles
+  static const List<_ReportData> _reports = [
+    _ReportData(
+      title: 'Ventas',
+      icon: Icons.trending_up,
+      color: AppColors.success,
+      description: 'Reportes diarios y mensuales',
+    ),
+    _ReportData(
+      title: 'Inventario',
+      icon: Icons.inventory_2,
+      color: AppColors.warning,
+      description: 'Stock y rotación',
+    ),
+    _ReportData(
+      title: 'Financiero',
+      icon: Icons.account_balance_wallet,
+      color: AppColors.info,
+      description: 'Ganancias y análisis',
+    ),
+    _ReportData(
+      title: 'Productos',
+      icon: Icons.bar_chart,
+      color: AppColors.primary,
+      description: 'Análisis de categorías',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -16,110 +59,43 @@ class ReportsScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.file_download),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Próximamente: Exportar reportes'),
-                ),
-              );
-            },
+            onPressed: () => _showExportMessage(context),
+            tooltip: 'Exportar reportes',
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSizes.paddingM),
-        child: Column(
-          children: [
-            // Header con estadística rápida
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSizes.paddingL),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(AppSizes.paddingM),
-                      decoration: BoxDecoration(
-                        color: AppColors.info.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(AppSizes.containerRadius),
-                      ),
-                      child: const Icon(
-                        Icons.analytics,
-                        size: AppSizes.iconXL,
-                        color: AppColors.info,
-                      ),
-                    ),
-                    const SizedBox(width: AppSizes.paddingM),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Reportes y Análisis',
-                            style: TextStyle(
-                              fontSize: AppSizes.textXL,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          SizedBox(height: AppSizes.paddingXS),
-                          Text(
-                            'Analiza el rendimiento de tu negocio',
-                            style: TextStyle(
-                              fontSize: AppSizes.textM,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+      body: Column(
+        children: [
+          // Header optimizado
+          const _ReportsHeader(),
+          
+          const SizedBox(height: AppSizes.paddingL),
+          
+          // Grid optimizado con builder
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSizes.paddingM),
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: AppSizes.paddingM,
+                  mainAxisSpacing: AppSizes.paddingM,
+                  childAspectRatio: 1.0,
                 ),
+                padding: const EdgeInsets.only(bottom: AppSizes.paddingM),
+                itemCount: _reports.length,
+                itemBuilder: (context, index) {
+                  final report = _reports[index];
+                  return _ReportCard(
+                    key: ValueKey(report.title),
+                    data: report,
+                    onTap: () => _showComingSoon(context, 'Reportes de ${report.title}'),
+                  );
+                },
               ),
             ),
-            
-            const SizedBox(height: AppSizes.paddingL),
-            
-            // Grid de tipos de reportes - OPTIMIZADO
-            Expanded(
-              child: GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: AppSizes.paddingM,
-                mainAxisSpacing: AppSizes.paddingM,
-                childAspectRatio: 1.0, // Más espacio vertical
-                children: [
-                  _ReportCard(
-                    title: 'Ventas',
-                    icon: Icons.trending_up,
-                    color: AppColors.success,
-                    description: 'Reportes diarios y mensuales',
-                    onTap: () => _showComingSoon(context, 'Reportes de Ventas'),
-                  ),
-                  _ReportCard(
-                    title: 'Inventario',
-                    icon: Icons.inventory_2,
-                    color: AppColors.warning,
-                    description: 'Stock y rotación',
-                    onTap: () => _showComingSoon(context, 'Reportes de Inventario'),
-                  ),
-                  _ReportCard(
-                    title: 'Financiero',
-                    icon: Icons.account_balance_wallet,
-                    color: AppColors.info,
-                    description: 'Ganancias y análisis',
-                    onTap: () => _showComingSoon(context, 'Reportes Financieros'),
-                  ),
-                  _ReportCard(
-                    title: 'Productos',
-                    icon: Icons.bar_chart,
-                    color: AppColors.primary,
-                    description: 'Análisis de categorías',
-                    onTap: () => _showComingSoon(context, 'Reportes de Productos'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -129,23 +105,123 @@ class ReportsScreen extends StatelessWidget {
       SnackBar(
         content: Text('Próximamente: $feature'),
         backgroundColor: AppColors.info,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(AppSizes.paddingM),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSizes.inputRadius),
+        ),
+      ),
+    );
+  }
+
+  static void _showExportMessage(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Próximamente: Exportar reportes'),
+        backgroundColor: AppColors.info,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.all(AppSizes.paddingM),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppSizes.inputRadius)),
+        ),
       ),
     );
   }
 }
 
+// Header separado y optimizado
+class _ReportsHeader extends StatelessWidget {
+  const _ReportsHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+        AppSizes.paddingM,
+        AppSizes.paddingM,
+        AppSizes.paddingM,
+        0,
+      ),
+      child: const Card(
+        child: Padding(
+          padding: EdgeInsets.all(AppSizes.paddingL),
+          child: Row(
+            children: [
+              // Icono container
+              _HeaderIcon(),
+              SizedBox(width: AppSizes.paddingM),
+              // Textos
+              Expanded(
+                child: _HeaderContent(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Icono del header como widget constante
+class _HeaderIcon extends StatelessWidget {
+  const _HeaderIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSizes.paddingM),
+      decoration: BoxDecoration(
+        color: AppColors.info.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(AppSizes.containerRadius),
+      ),
+      child: const Icon(
+        Icons.analytics,
+        size: AppSizes.iconXL,
+        color: AppColors.info,
+      ),
+    );
+  }
+}
+
+// Contenido del header como widget constante
+class _HeaderContent extends StatelessWidget {
+  const _HeaderContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Reportes y Análisis',
+          style: TextStyle(
+            fontSize: AppSizes.textXL,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        SizedBox(height: AppSizes.paddingXS),
+        Text(
+          'Analiza el rendimiento de tu negocio',
+          style: TextStyle(
+            fontSize: AppSizes.textM,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Card de reporte optimizada
 class _ReportCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Color color;
-  final String description;
+  final _ReportData data;
   final VoidCallback onTap;
 
   const _ReportCard({
-    required this.title,
-    required this.icon,
-    required this.color,
-    required this.description,
+    super.key,
+    required this.data,
     required this.onTap,
   });
 
@@ -157,53 +233,96 @@ class _ReportCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppSizes.cardRadius),
         child: Padding(
-          padding: const EdgeInsets.all(12), // Reducido de AppSizes.paddingM
+          padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min, // Importante para evitar overflow
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10), // Reducido
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppSizes.containerRadius),
-                ),
-                child: Icon(
-                  icon,
-                  size: 28, // Reducido de AppSizes.iconL
-                  color: color,
-                ),
-              ),
-              const SizedBox(height: 10), // Reducido
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16, // Tamaño fijo más pequeño
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 6), // Reducido
+              // Icono
+              _CardIcon(color: data.color, icon: data.icon),
+              const SizedBox(height: 10),
+              // Título
+              _CardTitle(title: data.title),
+              const SizedBox(height: 6),
+              // Descripción
               Flexible(
-                child: Text(
-                  description,
-                  style: const TextStyle(
-                    fontSize: 12, // Más pequeño
-                    color: AppColors.textSecondary,
-                    height: 1.2, // Interlineado compacto
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: _CardDescription(description: data.description),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+// Icono de la card como widget separado
+class _CardIcon extends StatelessWidget {
+  final Color color;
+  final IconData icon;
+
+  const _CardIcon({
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(AppSizes.containerRadius),
+      ),
+      child: Icon(
+        icon,
+        size: 28,
+        color: color,
+      ),
+    );
+  }
+}
+
+// Título de la card
+class _CardTitle extends StatelessWidget {
+  final String title;
+
+  const _CardTitle({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: AppColors.textPrimary,
+      ),
+      textAlign: TextAlign.center,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+}
+
+// Descripción de la card
+class _CardDescription extends StatelessWidget {
+  final String description;
+
+  const _CardDescription({required this.description});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      description,
+      style: const TextStyle(
+        fontSize: 12,
+        color: AppColors.textSecondary,
+        height: 1.2,
+      ),
+      textAlign: TextAlign.center,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

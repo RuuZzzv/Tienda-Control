@@ -1,4 +1,3 @@
-// lib/features/inventory/providers/inventory_provider.dart
 import 'package:flutter/material.dart';
 import '../models/movimiento_inventario.dart';
 import '../../products/models/product.dart';
@@ -13,71 +12,181 @@ class InventoryProvider extends ChangeNotifier {
   List<MovimientoInventario> _movimientos = [];
   bool _isLoading = false;
   String? _error;
+  bool _isInitialized = false;
 
   // Filtros
   bool _showLowStockOnly = false;
   bool _showExpiredOnly = false;
   bool _showExpiringOnly = false;
   int? _selectedCategoryId;
+  
+  // Cache mejorado con timestamps
+  List<Lote>? _cachedFilteredLotes;
+  List<Product>? _cachedFilteredProducts;
+  Map<String, dynamic>? _cachedStats;
+  String? _lastFilterKey;
+  
+  // Cache adicional para búsquedas frecuentes
+  final Map<int, List<Lote>> _lotesPerProductCache = {};
+  List<Product>? _lowStockProductsCache;
+  List<Lote>? _expiredLotesCache;
+  List<Lote>? _expiringLotesCache;
+  
+  // Control de notificaciones
+  bool _shouldNotify = true;
+  final Set<String> _pendingNotifications = {};
 
-  // Getters
+  // Getters básicos
   List<Product> get products => _products;
   List<Lote> get lotes => _lotes;
   List<MovimientoInventario> get movimientos => _movimientos;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get isInitialized => _isInitialized;
   bool get showLowStockOnly => _showLowStockOnly;
   bool get showExpiredOnly => _showExpiredOnly;
   bool get showExpiringOnly => _showExpiringOnly;
   int? get selectedCategoryId => _selectedCategoryId;
 
-  // Cargar datos de inventario
-  Future<void> loadInventoryData() async {
+  // Getters optimizados con cache dedicado
+  List<Product> get lowStockProducts {
+    _lowStockProductsCache ??= _products.where((p) => 
+      (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)
+    ).toList();
+    return _lowStockProductsCache!;
+  }
+
+  List<Lote> get expiredLotes {
+    _expiredLotesCache ??= _lotes.where((l) => 
+      l.fechaVencimiento != null && 
+      DateTime.now().isAfter(l.fechaVencimiento!) &&
+      l.cantidadActual > 0
+    ).toList();
+    return _expiredLotesCache!;
+  }
+
+  List<Lote> get expiringLotes {
+    _expiringLotesCache ??= _lotes.where((l) => 
+      l.fechaVencimiento != null && 
+      !DateTime.now().isAfter(l.fechaVencimiento!) &&
+      l.fechaVencimiento!.difference(DateTime.now()).inDays <= 7 &&
+      l.cantidadActual > 0
+    ).toList();
+    return _expiringLotesCache!;
+  }
+
+  // Inicializar solo cuando sea necesario
+  Future<void> initializeIfNeeded() async {
+    if (!_isInitialized) {
+      await _loadDataWithoutNotify();
+      _isInitialized = true;
+      _notifyIfNeeded();
+    }
+  }
+
+  // Método optimizado para notificaciones
+  void _notifyIfNeeded() {
+    if (_shouldNotify && _pendingNotifications.isNotEmpty) {
+      _pendingNotifications.clear();
+      notifyListeners();
+    }
+  }
+
+  // Batch de notificaciones para evitar múltiples rebuilds
+  void _batchNotify(String reason) {
+    _pendingNotifications.add(reason);
+    // Notificar en el siguiente frame para agrupar cambios
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _notifyIfNeeded();
+    });
+  }
+
+  // Método privado para cargar datos sin notificar
+  Future<void> _loadDataWithoutNotify() async {
+    if (_isLoading) return;
+    
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    _shouldNotify = false; // Deshabilitar notificaciones temporalmente
 
     try {
-      await Future.wait([
-        loadProducts(),
-        loadLotes(),
-      ]);
+      // Cargar productos y lotes en paralelo para mejor rendimiento
+      final results = await Future.wait([
+        _loadProductsInternal(),
+        _loadLotesInternal(),
+      ], eagerError: false);
       
-      // Intentar cargar movimientos sin fallar si hay error
-      try {
-        await loadMovimientos();
-      } catch (e) {
-        print('Warning: No se pudieron cargar movimientos: $e');
-        // No falla la carga general, solo no carga movimientos
-      }
+      // Cargar movimientos de forma asíncrona sin bloquear
+      _loadMovimientosAsync();
+      
+      // Limpiar todos los caches
+      _clearAllCaches();
       
     } catch (e) {
       _error = 'Error al cargar datos de inventario: $e';
       print('Inventory error: $e');
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _shouldNotify = true;
     }
   }
 
-  // Cargar productos con información de stock
-  Future<void> loadProducts() async {
+  // Cargar movimientos de forma asíncrona
+  void _loadMovimientosAsync() {
+    _loadMovimientosInternal().then((_) {
+      if (_shouldNotify) {
+        _batchNotify('movimientos');
+      }
+    }).catchError((e) {
+      print('Warning: No se pudieron cargar movimientos: $e');
+      _movimientos = [];
+    });
+  }
+
+  // Cargar datos con notificación
+  Future<void> loadInventoryData() async {
+    await _loadDataWithoutNotify();
+    _notifyIfNeeded();
+  }
+
+  // Cargar productos internamente con query optimizada
+  Future<void> _loadProductsInternal() async {
     try {
       final db = await _dbHelper.database;
       
+      // Query optimizada con índices apropiados
       final result = await db.rawQuery('''
         SELECT 
           p.*,
           c.nombre as categoria_nombre,
-          COALESCE(SUM(l.cantidad_actual), 0) as stock_actual,
-          COUNT(l.id) as total_lotes,
-          SUM(CASE WHEN l.fecha_vencimiento IS NOT NULL AND l.fecha_vencimiento <= date('now', '+7 days') AND l.cantidad_actual > 0 THEN 1 ELSE 0 END) as lotes_proximos_vencer,
-          SUM(CASE WHEN l.fecha_vencimiento IS NOT NULL AND l.fecha_vencimiento < date('now') AND l.cantidad_actual > 0 THEN 1 ELSE 0 END) as lotes_vencidos
+          COALESCE(ls.stock_actual, 0) as stock_actual,
+          COALESCE(ls.total_lotes, 0) as total_lotes,
+          COALESCE(ls.lotes_proximos_vencer, 0) as lotes_proximos_vencer,
+          COALESCE(ls.lotes_vencidos, 0) as lotes_vencidos
         FROM productos p
         LEFT JOIN categorias c ON p.categoria_id = c.id
-        LEFT JOIN lotes l ON p.id = l.producto_id AND l.activo = 1
+        LEFT JOIN (
+          SELECT 
+            producto_id,
+            SUM(cantidad_actual) as stock_actual,
+            COUNT(*) as total_lotes,
+            SUM(CASE 
+              WHEN fecha_vencimiento IS NOT NULL 
+                AND fecha_vencimiento <= date('now', '+7 days') 
+                AND cantidad_actual > 0 
+              THEN 1 ELSE 0 
+            END) as lotes_proximos_vencer,
+            SUM(CASE 
+              WHEN fecha_vencimiento IS NOT NULL 
+                AND fecha_vencimiento < date('now') 
+                AND cantidad_actual > 0 
+              THEN 1 ELSE 0 
+            END) as lotes_vencidos
+          FROM lotes
+          WHERE activo = 1
+          GROUP BY producto_id
+        ) ls ON p.id = ls.producto_id
         WHERE p.activo = 1
-        GROUP BY p.id, p.nombre, c.nombre
         ORDER BY p.nombre
       ''');
 
@@ -86,14 +195,16 @@ class InventoryProvider extends ChangeNotifier {
     } catch (e) {
       print('Error cargando productos: $e');
       _products = [];
+      rethrow;
     }
   }
 
-  // Cargar lotes
-  Future<void> loadLotes() async {
+  // Cargar lotes internamente con query optimizada
+  Future<void> _loadLotesInternal() async {
     try {
       final db = await _dbHelper.database;
       
+      // Query optimizada con solo los campos necesarios
       final result = await db.rawQuery('''
         SELECT 
           l.*,
@@ -101,8 +212,12 @@ class InventoryProvider extends ChangeNotifier {
           p.precio_venta
         FROM lotes l
         INNER JOIN productos p ON l.producto_id = p.id
-        WHERE l.activo = 1 AND p.activo = 1
+        WHERE l.activo = 1 AND p.activo = 1 AND l.cantidad_actual > 0
         ORDER BY 
+          CASE 
+            WHEN l.fecha_vencimiento IS NULL THEN 1 
+            ELSE 0 
+          END,
           l.fecha_vencimiento ASC,
           p.nombre ASC
       ''');
@@ -112,56 +227,39 @@ class InventoryProvider extends ChangeNotifier {
     } catch (e) {
       print('Error cargando lotes: $e');
       _lotes = [];
+      rethrow;
     }
   }
 
-  // Cargar movimientos de inventario - con manejo de errores mejorado
-  Future<void> loadMovimientos() async {
+  // Cargar movimientos con límite y paginación
+  Future<void> _loadMovimientosInternal({int limit = 50}) async {
     try {
       final db = await _dbHelper.database;
       
-      // Primero verificar si la tabla existe
+      // Verificar si la tabla existe
       final tables = await db.rawQuery(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='movimientos_inventario'"
       );
       
       if (tables.isEmpty) {
-        print('Warning: Tabla movimientos_inventario no existe');
         _movimientos = [];
         return;
       }
       
-      // Verificar las columnas de la tabla
-      final columns = await db.rawQuery('PRAGMA table_info(movimientos_inventario)');
-      final columnNames = columns.map((col) => col['name']).toList();
+      // Query limitada para mejor rendimiento
+      final result = await db.rawQuery('''
+        SELECT 
+          m.*,
+          p.nombre as producto_nombre,
+          l.numero_lote,
+          l.codigo_lote_interno
+        FROM movimientos_inventario m
+        LEFT JOIN productos p ON m.producto_id = p.id
+        LEFT JOIN lotes l ON m.lote_id = l.id
+        ORDER BY m.fecha_movimiento DESC
+        LIMIT ?
+      ''', [limit]);
       
-      print('Columnas disponibles en movimientos_inventario: $columnNames');
-      
-      // Construir query según las columnas disponibles
-      String query;
-      if (columnNames.contains('producto_id')) {
-        query = '''
-          SELECT 
-            m.*,
-            p.nombre as producto_nombre,
-            l.numero_lote,
-            l.codigo_lote_interno
-          FROM movimientos_inventario m
-          LEFT JOIN productos p ON m.producto_id = p.id
-          LEFT JOIN lotes l ON m.lote_id = l.id
-          ORDER BY m.fecha_movimiento DESC
-          LIMIT 100
-        ''';
-      } else {
-        // Si no existe la columna producto_id, solo obtener movimientos básicos
-        query = '''
-          SELECT * FROM movimientos_inventario 
-          ORDER BY fecha_movimiento DESC 
-          LIMIT 100
-        ''';
-      }
-
-      final result = await db.rawQuery(query);
       _movimientos = result.map((map) => MovimientoInventario.fromMap(map)).toList();
       
     } catch (e) {
@@ -170,7 +268,7 @@ class InventoryProvider extends ChangeNotifier {
     }
   }
 
-  // Agregar lote a un producto
+  // Agregar lote optimizado con transacción
   Future<bool> addLote({
     required int productoId,
     String? numeroLote,
@@ -182,246 +280,220 @@ class InventoryProvider extends ChangeNotifier {
     try {
       final db = await _dbHelper.database;
       
-      // Generar código de lote interno
-      final codigoLoteInterno = await _generateCodigoLoteInterno(productoId);
-      
-      final lote = Lote(
-        productoId: productoId,
-        numeroLote: numeroLote,
-        codigoLoteInterno: codigoLoteInterno,
-        fechaVencimiento: fechaVencimiento,
-        cantidadInicial: cantidadInicial,
-        cantidadActual: cantidadInicial,
-        precioCompraLote: precioCompraLote,
-        notas: notas,
-      );
-
-      // Insertar lote
-      final loteId = await db.insert('lotes', lote.toMap());
-      
-      // Intentar crear movimiento de inventario (puede fallar si la tabla no existe)
-      try {
-        final movimiento = MovimientoInventario(
+      // Usar transacción para consistencia y rendimiento
+      await db.transaction((txn) async {
+        final codigoLoteInterno = await _generateCodigoLoteInternoOptimized(txn, productoId);
+        
+        final lote = Lote(
           productoId: productoId,
-          loteId: loteId,
-          tipoMovimiento: TipoMovimiento.entrada,
-          cantidad: cantidadInicial,
-          motivo: 'Ingreso de nuevo lote',
-          observaciones: notas,
+          numeroLote: numeroLote,
+          codigoLoteInterno: codigoLoteInterno,
+          fechaVencimiento: fechaVencimiento,
+          cantidadInicial: cantidadInicial,
+          cantidadActual: cantidadInicial,
+          precioCompraLote: precioCompraLote,
+          notas: notas,
         );
 
-        await db.insert('movimientos_inventario', movimiento.toMap());
-      } catch (e) {
-        print('Warning: No se pudo crear movimiento de inventario: $e');
-      }
+        final loteId = await txn.insert('lotes', lote.toMap());
+        
+        // Intentar crear movimiento en la misma transacción
+        try {
+          final movimiento = MovimientoInventario(
+            productoId: productoId,
+            loteId: loteId,
+            tipoMovimiento: TipoMovimiento.entrada,
+            cantidad: cantidadInicial,
+            motivo: 'Ingreso de nuevo lote',
+            observaciones: notas,
+            fechaMovimiento: DateTime.now(),
+          );
+
+          await txn.insert('movimientos_inventario', movimiento.toMap());
+        } catch (e) {
+          print('Warning: No se pudo crear movimiento: $e');
+        }
+      });
       
-      // Recargar datos
-      await loadInventoryData();
+      // Actualizar solo los datos necesarios
+      await _refreshDataOptimized();
       
       return true;
     } catch (e) {
       _error = 'Error al agregar lote: $e';
       print('Error en addLote: $e');
-      notifyListeners();
+      _batchNotify('error');
       return false;
     }
   }
 
-  // Ajustar stock de un lote
-  Future<bool> adjustStock({
-    required int loteId,
-    required int nuevaCantidad,
-    required String motivo,
-    String? observaciones,
-  }) async {
-    try {
-      final db = await _dbHelper.database;
-      
-      // Obtener lote actual
-      final loteResult = await db.query(
-        'lotes',
-        where: 'id = ?',
-        whereArgs: [loteId],
-      );
-      
-      if (loteResult.isEmpty) {
-        _error = 'Lote no encontrado';
-        notifyListeners();
-        return false;
-      }
-      
-      final loteData = loteResult.first;
-      final cantidadAnterior = loteData['cantidad_actual'] as int;
-      final productoId = loteData['producto_id'] as int;
-      
-      // Actualizar cantidad del lote
-      await db.update(
-        'lotes',
-        {'cantidad_actual': nuevaCantidad},
-        where: 'id = ?',
-        whereArgs: [loteId],
-      );
-      
-      // Intentar crear movimiento de inventario
-      try {
-        final diferencia = nuevaCantidad - cantidadAnterior;
-        final tipoMovimiento = diferencia > 0 
-            ? TipoMovimiento.entrada 
-            : TipoMovimiento.salida;
-        
-        final movimiento = MovimientoInventario(
-          productoId: productoId,
-          loteId: loteId,
-          tipoMovimiento: tipoMovimiento,
-          cantidad: diferencia.abs(),
-          motivo: motivo,
-          observaciones: observaciones,
-        );
-
-        await db.insert('movimientos_inventario', movimiento.toMap());
-      } catch (e) {
-        print('Warning: No se pudo crear movimiento de inventario: $e');
-      }
-      
-      // Recargar datos
-      await loadInventoryData();
-      
-      return true;
-    } catch (e) {
-      _error = 'Error al ajustar stock: $e';
-      print('Error en adjustStock: $e');
-      notifyListeners();
-      return false;
-    }
+  // Método optimizado para refrescar datos
+  Future<void> _refreshDataOptimized() async {
+    _shouldNotify = false;
+    
+    // Cargar solo productos y lotes (los más importantes)
+    await Future.wait([
+      _loadProductsInternal(),
+      _loadLotesInternal(),
+    ]);
+    
+    _clearAllCaches();
+    _shouldNotify = true;
+    _batchNotify('data-refresh');
+    
+    // Cargar movimientos de forma asíncrona
+    _loadMovimientosAsync();
   }
 
-  // Obtener lotes filtrados
-  List<Lote> getFilteredLotes() {
-    List<Lote> filtered = List.from(_lotes);
-    
-    if (_showExpiredOnly) {
-      filtered = filtered.where((lote) => 
-        lote.fechaVencimiento != null && 
-        DateTime.now().isAfter(lote.fechaVencimiento!) &&
-        lote.cantidadActual > 0
-      ).toList();
-    } else if (_showExpiringOnly) {
-      filtered = filtered.where((lote) => 
-        lote.fechaVencimiento != null && 
-        !DateTime.now().isAfter(lote.fechaVencimiento!) &&
-        lote.fechaVencimiento!.difference(DateTime.now()).inDays <= 7 &&
-        lote.cantidadActual > 0
-      ).toList();
-    }
-    
-    return filtered;
-  }
-
-  // Obtener productos filtrados
-  List<Product> getFilteredProducts() {
-    List<Product> filtered = List.from(_products);
-    
-    if (_showLowStockOnly) {
-      filtered = filtered.where((product) => 
-        (product.stockActual ?? 0) <= (product.stockMinimo ?? 0)
-      ).toList();
-    }
-    
-    if (_selectedCategoryId != null) {
-      filtered = filtered.where((product) => product.categoriaId == _selectedCategoryId).toList();
-    }
-    
-    return filtered;
-  }
-
-  // Obtener estadísticas de inventario - versión simplificada y segura
-  Map<String, dynamic> getInventoryStats() {
-    try {
-      final totalProductos = _products.length;
-      final productosStockBajo = _products.where((p) => 
-        (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)
-      ).length;
-      final lotesVencidos = _lotes.where((l) => 
-        l.fechaVencimiento != null && 
-        DateTime.now().isAfter(l.fechaVencimiento!) &&
-        l.cantidadActual > 0
-      ).length;
-      final lotesProximosVencer = _lotes.where((l) => 
-        l.fechaVencimiento != null && 
-        !DateTime.now().isAfter(l.fechaVencimiento!) &&
-        l.fechaVencimiento!.difference(DateTime.now()).inDays <= 7 &&
-        l.cantidadActual > 0
-      ).length;
-      final totalLotes = _lotes.where((l) => l.cantidadActual > 0).length;
-      
-      return {
-        'totalProductos': totalProductos,
-        'productosStockBajo': productosStockBajo,
-        'lotesVencidos': lotesVencidos,
-        'lotesProximosVencer': lotesProximosVencer,
-        'totalLotes': totalLotes,
-      };
-    } catch (e) {
-      print('Error calculando estadísticas: $e');
-      return {
-        'totalProductos': 0,
-        'productosStockBajo': 0,
-        'lotesVencidos': 0,
-        'lotesProximosVencer': 0,
-        'totalLotes': 0,
-      };
-    }
-  }
-
-  // Obtener lotes para un producto específico
+  // Obtener lotes para un producto con cache
   List<Lote> getLotesForProduct(int productId) {
-    return _lotes.where((lote) => lote.productoId == productId).toList();
+    // Usar cache por producto
+    if (!_lotesPerProductCache.containsKey(productId)) {
+      _lotesPerProductCache[productId] = _lotes
+          .where((lote) => lote.productoId == productId)
+          .toList();
+    }
+    return _lotesPerProductCache[productId]!;
   }
 
-  // Cambiar filtros
+  // Obtener lotes filtrados con cache mejorado
+  List<Lote> getFilteredLotes() {
+    final filterKey = 'lotes-$_showExpiredOnly-$_showExpiringOnly';
+    
+    if (_cachedFilteredLotes != null && _lastFilterKey == filterKey) {
+      return _cachedFilteredLotes!;
+    }
+    
+    // Usar listas pre-cacheadas cuando sea posible
+    if (_showExpiredOnly) {
+      _cachedFilteredLotes = List.from(expiredLotes);
+    } else if (_showExpiringOnly) {
+      _cachedFilteredLotes = List.from(expiringLotes);
+    } else {
+      _cachedFilteredLotes = List.from(_lotes);
+    }
+    
+    _lastFilterKey = filterKey;
+    return _cachedFilteredLotes!;
+  }
+
+  // Obtener productos filtrados con cache mejorado
+  List<Product> getFilteredProducts() {
+    final filterKey = 'products-$_showLowStockOnly-$_selectedCategoryId';
+    
+    if (_cachedFilteredProducts != null && _lastFilterKey == filterKey) {
+      return _cachedFilteredProducts!;
+    }
+    
+    // Usar lista pre-cacheada para stock bajo
+    if (_showLowStockOnly && _selectedCategoryId == null) {
+      _cachedFilteredProducts = List.from(lowStockProducts);
+    } else {
+      List<Product> filtered = _showLowStockOnly 
+          ? List.from(lowStockProducts)
+          : List.from(_products);
+      
+      if (_selectedCategoryId != null) {
+        filtered = filtered
+            .where((product) => product.categoriaId == _selectedCategoryId)
+            .toList();
+      }
+      
+      _cachedFilteredProducts = filtered;
+    }
+    
+    _lastFilterKey = filterKey;
+    return _cachedFilteredProducts!;
+  }
+
+  // Obtener estadísticas con cache permanente
+  Map<String, dynamic> getInventoryStats() {
+    if (_cachedStats != null) {
+      return _cachedStats!;
+    }
+    
+    _cachedStats = {
+      'totalProductos': _products.length,
+      'productosStockBajo': lowStockProducts.length,
+      'lotesVencidos': expiredLotes.length,
+      'lotesProximosVencer': expiringLotes.length,
+      'totalLotes': _lotes.where((l) => l.cantidadActual > 0).length,
+    };
+    
+    return _cachedStats!;
+  }
+
+  // Cambiar filtros con notificación agrupada
   void toggleLowStockFilter() {
     _showLowStockOnly = !_showLowStockOnly;
-    notifyListeners();
+    _clearFilterCaches();
+    _batchNotify('filter-change');
   }
 
   void toggleExpiredFilter() {
     _showExpiredOnly = !_showExpiredOnly;
     if (_showExpiredOnly) _showExpiringOnly = false;
-    notifyListeners();
+    _clearFilterCaches();
+    _batchNotify('filter-change');
   }
 
   void toggleExpiringFilter() {
     _showExpiringOnly = !_showExpiringOnly;
     if (_showExpiringOnly) _showExpiredOnly = false;
-    notifyListeners();
+    _clearFilterCaches();
+    _batchNotify('filter-change');
   }
 
   void setCategoryFilter(int? categoryId) {
-    _selectedCategoryId = categoryId;
-    notifyListeners();
+    if (_selectedCategoryId != categoryId) {
+      _selectedCategoryId = categoryId;
+      _clearFilterCaches();
+      _batchNotify('filter-change');
+    }
   }
 
   void clearAllFilters() {
-    _showLowStockOnly = false;
-    _showExpiredOnly = false;
-    _showExpiringOnly = false;
-    _selectedCategoryId = null;
-    notifyListeners();
+    final hasChanges = _showLowStockOnly || _showExpiredOnly || 
+                      _showExpiringOnly || _selectedCategoryId != null;
+    
+    if (hasChanges) {
+      _showLowStockOnly = false;
+      _showExpiredOnly = false;
+      _showExpiringOnly = false;
+      _selectedCategoryId = null;
+      _clearFilterCaches();
+      _batchNotify('filter-clear');
+    }
   }
 
-  // Generar código de lote interno
-  Future<String> _generateCodigoLoteInterno(int productoId) async {
+  // Limpiar solo caches de filtros
+  void _clearFilterCaches() {
+    _cachedFilteredLotes = null;
+    _cachedFilteredProducts = null;
+    _lastFilterKey = null;
+  }
+
+  // Limpiar todos los caches
+  void _clearAllCaches() {
+    _clearFilterCaches();
+    _cachedStats = null;
+    _lotesPerProductCache.clear();
+    _lowStockProductsCache = null;
+    _expiredLotesCache = null;
+    _expiringLotesCache = null;
+  }
+
+  // Generar código de lote optimizado
+  Future<String> _generateCodigoLoteInternoOptimized(dynamic db, int productoId) async {
     try {
-      final db = await _dbHelper.database;
       final result = await db.rawQuery(
         'SELECT COUNT(*) as count FROM lotes WHERE producto_id = ?',
         [productoId],
       );
-      int count = result.first['count'] as int;
-      return 'PROD-${productoId.toString().padLeft(6, '0')}-L${(count + 1).toString().padLeft(3, '0')}';
+      int count = (result.first['count'] as int?) ?? 0;
+      return 'L${productoId.toString().padLeft(4, '0')}-${(count + 1).toString().padLeft(3, '0')}';
     } catch (e) {
-      print('Error generando código de lote: $e');
-      return 'LOTE-${DateTime.now().millisecondsSinceEpoch}';
+      return 'L${DateTime.now().millisecondsSinceEpoch}';
     }
   }
 
@@ -430,9 +502,18 @@ class InventoryProvider extends ChangeNotifier {
     await loadInventoryData();
   }
 
-  // Limpiar errores
+  // Limpiar errores sin notificar si no hay cambios
   void clearError() {
-    _error = null;
-    notifyListeners();
+    if (_error != null) {
+      _error = null;
+      _batchNotify('error-clear');
+    }
+  }
+
+  @override
+  void dispose() {
+    _clearAllCaches();
+    _pendingNotifications.clear();
+    super.dispose();
   }
 }

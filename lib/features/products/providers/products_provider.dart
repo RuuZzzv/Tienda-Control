@@ -14,7 +14,7 @@ class ProductsProvider extends ChangeNotifier {
   bool _isInitialized = false;
   
   // Cache para búsquedas y filtros
-  Map<String, List<Product>> _searchCache = {};
+  final Map<String, List<Product>> _searchCache = {};
   List<Product>? _cachedLowStockProducts;
 
   // Getters

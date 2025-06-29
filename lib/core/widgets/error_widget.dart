@@ -29,7 +29,7 @@ class CustomErrorWidget extends StatelessWidget {
               color: AppColors.error.withOpacity(0.7),
             ),
             const SizedBox(height: AppSizes.paddingL),
-            Text(
+            const Text(
               'Oops! Algo salió mal',
               style: TextStyle(
                 fontSize: AppSizes.textXL,

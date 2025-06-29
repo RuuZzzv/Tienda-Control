@@ -1,4 +1,3 @@
-// lib/features/inventory/screens/add_lote_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -36,21 +35,25 @@ class _AddLoteScreenState extends State<AddLoteScreen> {
   void initState() {
     super.initState();
     _selectedProduct = widget.preselectedProduct;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.preselectedProduct == null) {
-        context.read<ProductsProvider>().loadProducts();
-      }
-    });
+    if (widget.preselectedProduct == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<ProductsProvider>().initializeIfNeeded();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<LanguageProvider>(
-      builder: (context, languageProvider, child) {
+    // Usar Selector para solo escuchar el idioma actual
+    return Selector<LanguageProvider, String>(
+      selector: (_, provider) => provider.currentLanguage,
+      builder: (context, currentLanguage, child) {
+        final languageProvider = context.read<LanguageProvider>();
+        
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
-            title: const Text('Agregar Lote'),
+            title: Text(languageProvider.translate('add_lote')),
             actions: [
               TextButton(
                 onPressed: _isLoading ? null : _saveLote,
@@ -82,367 +85,58 @@ class _AddLoteScreenState extends State<AddLoteScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Información del lote
-                  _buildSectionTitle('Información del Lote'),
-                  _buildLoteInfo(languageProvider),
+                  _SectionTitle(title: languageProvider.translate('lote_info')),
+                  _LoteInfoCard(
+                    numeroLoteController: _numeroLoteController,
+                    cantidadController: _cantidadController,
+                    fechaVencimiento: _fechaVencimiento,
+                    onSelectDate: _selectExpirationDate,
+                    languageProvider: languageProvider,
+                  ),
                   
                   const SizedBox(height: AppSizes.sectionSpacing),
                   
-                  // Selección de producto (si no está preseleccionado)
+                  // Selección de producto
                   if (widget.preselectedProduct == null) ...[
-                    _buildSectionTitle('Seleccionar Producto'),
-                    _buildProductSelector(),
+                    _SectionTitle(title: languageProvider.translate('select_product')),
+                    _ProductSelector(
+                      selectedProduct: _selectedProduct,
+                      onProductChanged: (product) {
+                        setState(() {
+                          _selectedProduct = product;
+                        });
+                      },
+                    ),
                     const SizedBox(height: AppSizes.sectionSpacing),
                   ] else ...[
-                    _buildSectionTitle('Producto Seleccionado'),
-                    _buildSelectedProductInfo(),
+                    _SectionTitle(title: languageProvider.translate('selected_product')),
+                    _SelectedProductInfo(product: widget.preselectedProduct!),
                     const SizedBox(height: AppSizes.sectionSpacing),
                   ],
                   
                   // Información adicional
-                  _buildSectionTitle('Información Adicional'),
-                  _buildAdditionalInfo(languageProvider),
+                  _SectionTitle(title: languageProvider.translate('additional_info')),
+                  _AdditionalInfoCard(
+                    precioCompraController: _precioCompraController,
+                    notasController: _notasController,
+                    languageProvider: languageProvider,
+                  ),
                   
                   const SizedBox(height: AppSizes.sectionSpacing),
                   
                   // Botones de acción
-                  _buildActionButtons(languageProvider),
+                  _ActionButtons(
+                    isLoading: _isLoading,
+                    onCancel: () => context.pop(),
+                    onSave: _saveLote,
+                    languageProvider: languageProvider,
+                  ),
                 ],
               ),
             ),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSizes.paddingM),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: AppSizes.textXL,
-          fontWeight: FontWeight.bold,
-          color: AppColors.textPrimary,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoteInfo(LanguageProvider languageProvider) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.paddingM),
-        child: Column(
-          children: [
-            // Número de lote
-            TextFormField(
-              controller: _numeroLoteController,
-              decoration: const InputDecoration(
-                labelText: 'Número de Lote (opcional)',
-                hintText: 'Ej: ABC123, LOT-001',
-                prefixIcon: Icon(Icons.batch_prediction),
-                helperText: 'Si no se especifica, se generará automáticamente',
-              ),
-              style: const TextStyle(fontSize: AppSizes.textL),
-            ),
-            
-            const SizedBox(height: AppSizes.paddingM),
-            
-            // Cantidad
-            TextFormField(
-              controller: _cantidadController,
-              decoration: const InputDecoration(
-                labelText: 'Cantidad *',
-                hintText: '0',
-                prefixIcon: Icon(Icons.inventory),
-              ),
-              style: const TextStyle(fontSize: AppSizes.textL),
-              keyboardType: TextInputType.number,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'La cantidad es obligatoria';
-                }
-                if (int.tryParse(value) == null) {
-                  return 'Ingrese una cantidad válida';
-                }
-                if (int.parse(value) <= 0) {
-                  return 'La cantidad debe ser mayor a 0';
-                }
-                return null;
-              },
-            ),
-            
-            const SizedBox(height: AppSizes.paddingM),
-            
-            // Fecha de vencimiento
-            InkWell(
-              onTap: _selectExpirationDate,
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Fecha de Vencimiento (opcional)',
-                  prefixIcon: Icon(Icons.calendar_today),
-                  suffixIcon: Icon(Icons.arrow_drop_down),
-                  helperText: 'Opcional para productos no perecederos',
-                ),
-                child: Text(
-                  _fechaVencimiento != null
-                      ? '${_fechaVencimiento!.day}/${_fechaVencimiento!.month}/${_fechaVencimiento!.year}'
-                      : 'Seleccionar fecha',
-                  style: TextStyle(
-                    fontSize: AppSizes.textL,
-                    color: _fechaVencimiento != null 
-                        ? AppColors.textPrimary 
-                        : AppColors.textTertiary,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProductSelector() {
-    return Consumer<ProductsProvider>(
-      builder: (context, productsProvider, child) {
-        if (productsProvider.isLoading) {
-          return const Card(
-            child: Padding(
-              padding: EdgeInsets.all(AppSizes.paddingL),
-              child: Center(
-                child: CircularProgressIndicator(),
-              ),
-            ),
-          );
-        }
-
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSizes.paddingM),
-            child: Column(
-              children: [
-                DropdownButtonFormField<Product>(
-                  value: _selectedProduct,
-                  decoration: const InputDecoration(
-                    labelText: 'Producto *',
-                    prefixIcon: Icon(Icons.inventory_2),
-                  ),
-                  style: const TextStyle(
-                    fontSize: AppSizes.textL,
-                    color: AppColors.textPrimary,
-                  ),
-                  items: productsProvider.products.map((product) {
-                    return DropdownMenuItem<Product>(
-                      value: product,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            product.nombre,
-                            style: const TextStyle(
-                              fontSize: AppSizes.textM,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            'Stock actual: ${product.stockActual} ${product.unidadMedida}',
-                            style: const TextStyle(
-                              fontSize: AppSizes.textS,
-                              color: AppColors.textTertiary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedProduct = value;
-                    });
-                  },
-                  validator: (value) {
-                    if (value == null) {
-                      return 'Debe seleccionar un producto';
-                    }
-                    return null;
-                  },
-                ),
-                
-                if (_selectedProduct != null) ...[
-                  const SizedBox(height: AppSizes.paddingM),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(AppSizes.paddingM),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      borderRadius: BorderRadius.circular(AppSizes.inputRadius),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Información del Producto',
-                          style: TextStyle(
-                            fontSize: AppSizes.textM,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSizes.paddingS),
-                        _InfoRow('Código', _selectedProduct!.codigoDisplay),
-                        _InfoRow('Stock Actual', '${_selectedProduct!.stockActual} ${_selectedProduct!.unidadMedida}'),
-                        _InfoRow('Stock Mínimo', '${_selectedProduct!.stockMinimo} ${_selectedProduct!.unidadMedida}'),
-                        if (_selectedProduct!.categoriaNombre != null)
-                          _InfoRow('Categoría', _selectedProduct!.categoriaNombre!),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildSelectedProductInfo() {
-    if (widget.preselectedProduct == null) return const SizedBox();
-    
-    final product = widget.preselectedProduct!;
-    
-    return Card(
-      color: AppColors.primary.withOpacity(0.1),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.paddingM),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(AppSizes.paddingM),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(AppSizes.containerRadius),
-              ),
-              child: const Icon(
-                Icons.inventory_2,
-                color: AppColors.primary,
-                size: AppSizes.iconL,
-              ),
-            ),
-            const SizedBox(width: AppSizes.paddingM),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.nombre,
-                    style: const TextStyle(
-                      fontSize: AppSizes.textL,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  Text(
-                    'Código: ${product.codigoDisplay}',
-                    style: const TextStyle(
-                      fontSize: AppSizes.textM,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  Text(
-                    'Stock actual: ${product.stockActual} ${product.unidadMedida}',
-                    style: const TextStyle(
-                      fontSize: AppSizes.textM,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAdditionalInfo(LanguageProvider languageProvider) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.paddingM),
-        child: Column(
-          children: [
-            // Precio de compra del lote
-            TextFormField(
-              controller: _precioCompraController,
-              decoration: const InputDecoration(
-                labelText: 'Precio de Compra (opcional)',
-                hintText: '0',
-                prefixIcon: Icon(Icons.attach_money),
-                prefixText: '\$ ',
-                helperText: 'Precio de compra específico para este lote',
-              ),
-              style: const TextStyle(fontSize: AppSizes.textL),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            
-            const SizedBox(height: AppSizes.paddingM),
-            
-            // Notas
-            TextFormField(
-              controller: _notasController,
-              decoration: const InputDecoration(
-                labelText: 'Notas (opcional)',
-                hintText: 'Observaciones sobre este lote...',
-                prefixIcon: Icon(Icons.note),
-              ),
-              style: const TextStyle(fontSize: AppSizes.textL),
-              maxLines: 3,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButtons(LanguageProvider languageProvider) {
-    return Column(
-      children: [
-        // Botón cancelar
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _isLoading ? null : () => context.pop(),
-            icon: const Icon(Icons.cancel),
-            label: Text(
-              languageProvider.translate('cancel'),
-              style: const TextStyle(fontSize: AppSizes.textL),
-            ),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingM),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSizes.paddingM),
-        // Botón guardar
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _isLoading ? null : _saveLote,
-            icon: const Icon(Icons.add_box),
-            label: const Text(
-              'Agregar Lote',
-              style: TextStyle(fontSize: AppSizes.textL),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.textOnPrimary,
-              padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingM),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -542,6 +236,422 @@ class _AddLoteScreenState extends State<AddLoteScreen> {
   }
 }
 
+// Widget separado para títulos de sección
+class _SectionTitle extends StatelessWidget {
+  final String title;
+
+  const _SectionTitle({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSizes.paddingM),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: AppSizes.textXL,
+          fontWeight: FontWeight.bold,
+          color: AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
+}
+
+// Widget separado para información del lote
+class _LoteInfoCard extends StatelessWidget {
+  final TextEditingController numeroLoteController;
+  final TextEditingController cantidadController;
+  final DateTime? fechaVencimiento;
+  final VoidCallback onSelectDate;
+  final LanguageProvider languageProvider;
+
+  const _LoteInfoCard({
+    required this.numeroLoteController,
+    required this.cantidadController,
+    required this.fechaVencimiento,
+    required this.onSelectDate,
+    required this.languageProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSizes.paddingM),
+        child: Column(
+          children: [
+            // Número de lote
+            TextFormField(
+              controller: numeroLoteController,
+              decoration: InputDecoration(
+                labelText: languageProvider.translate('lote_number_optional'),
+                hintText: 'Ej: ABC123, LOT-001',
+                prefixIcon: const Icon(Icons.batch_prediction),
+                helperText: languageProvider.translate('auto_generate_if_empty'),
+              ),
+              style: const TextStyle(fontSize: AppSizes.textL),
+            ),
+            
+            const SizedBox(height: AppSizes.paddingM),
+            
+            // Cantidad
+            TextFormField(
+              controller: cantidadController,
+              decoration: InputDecoration(
+                labelText: '${languageProvider.translate('quantity')} *',
+                hintText: '0',
+                prefixIcon: const Icon(Icons.inventory),
+              ),
+              style: const TextStyle(fontSize: AppSizes.textL),
+              keyboardType: TextInputType.number,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return languageProvider.translate('quantity_required');
+                }
+                if (int.tryParse(value) == null) {
+                  return languageProvider.translate('enter_valid_quantity');
+                }
+                if (int.parse(value) <= 0) {
+                  return languageProvider.translate('quantity_must_be_greater_zero');
+                }
+                return null;
+              },
+            ),
+            
+            const SizedBox(height: AppSizes.paddingM),
+            
+            // Fecha de vencimiento
+            InkWell(
+              onTap: onSelectDate,
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: languageProvider.translate('expiration_date_optional'),
+                  prefixIcon: const Icon(Icons.calendar_today),
+                  suffixIcon: const Icon(Icons.arrow_drop_down),
+                  helperText: languageProvider.translate('optional_non_perishable'),
+                ),
+                child: Text(
+                  fechaVencimiento != null
+                      ? '${fechaVencimiento!.day}/${fechaVencimiento!.month}/${fechaVencimiento!.year}'
+                      : languageProvider.translate('select_date'),
+                  style: TextStyle(
+                    fontSize: AppSizes.textL,
+                    color: fechaVencimiento != null 
+                        ? AppColors.textPrimary 
+                        : AppColors.textTertiary,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Widget separado para selector de producto
+class _ProductSelector extends StatelessWidget {
+  final Product? selectedProduct;
+  final ValueChanged<Product?> onProductChanged;
+
+  const _ProductSelector({
+    required this.selectedProduct,
+    required this.onProductChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<ProductsProvider, ({bool isLoading, List<Product> products})>(
+      selector: (_, provider) => (
+        isLoading: provider.isLoading,
+        products: provider.products,
+      ),
+      builder: (context, data, child) {
+        if (data.isLoading) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(AppSizes.paddingL),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          );
+        }
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSizes.paddingM),
+            child: Column(
+              children: [
+                DropdownButtonFormField<Product>(
+                  value: selectedProduct,
+                  decoration: const InputDecoration(
+                    labelText: 'Producto *',
+                    prefixIcon: Icon(Icons.inventory_2),
+                  ),
+                  style: const TextStyle(
+                    fontSize: AppSizes.textL,
+                    color: AppColors.textPrimary,
+                  ),
+                  items: data.products.map((product) {
+                    return DropdownMenuItem<Product>(
+                      value: product,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            product.nombre,
+                            style: const TextStyle(
+                              fontSize: AppSizes.textM,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'Stock actual: ${product.stockActual} ${product.unidadMedida}',
+                            style: const TextStyle(
+                              fontSize: AppSizes.textS,
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: onProductChanged,
+                  validator: (value) {
+                    if (value == null) {
+                      return 'Debe seleccionar un producto';
+                    }
+                    return null;
+                  },
+                ),
+                
+                if (selectedProduct != null) ...[
+                  const SizedBox(height: AppSizes.paddingM),
+                  _ProductInfoBox(product: selectedProduct!),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Widget para mostrar información del producto seleccionado
+class _ProductInfoBox extends StatelessWidget {
+  final Product product;
+
+  const _ProductInfoBox({required this.product});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSizes.paddingM),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppSizes.inputRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Información del Producto',
+            style: TextStyle(
+              fontSize: AppSizes.textM,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: AppSizes.paddingS),
+          _InfoRow('Código', product.codigoDisplay),
+          _InfoRow('Stock Actual', '${product.stockActual} ${product.unidadMedida}'),
+          _InfoRow('Stock Mínimo', '${product.stockMinimo} ${product.unidadMedida}'),
+          if (product.categoriaNombre != null)
+            _InfoRow('Categoría', product.categoriaNombre!),
+        ],
+      ),
+    );
+  }
+}
+
+// Widget para producto preseleccionado
+class _SelectedProductInfo extends StatelessWidget {
+  final Product product;
+
+  const _SelectedProductInfo({required this.product});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: AppColors.primary.withOpacity(0.1),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSizes.paddingM),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSizes.paddingM),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(AppSizes.containerRadius),
+              ),
+              child: const Icon(
+                Icons.inventory_2,
+                color: AppColors.primary,
+                size: AppSizes.iconL,
+              ),
+            ),
+            const SizedBox(width: AppSizes.paddingM),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.nombre,
+                    style: const TextStyle(
+                      fontSize: AppSizes.textL,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  Text(
+                    'Código: ${product.codigoDisplay}',
+                    style: const TextStyle(
+                      fontSize: AppSizes.textM,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  Text(
+                    'Stock actual: ${product.stockActual} ${product.unidadMedida}',
+                    style: const TextStyle(
+                      fontSize: AppSizes.textM,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Widget para información adicional
+class _AdditionalInfoCard extends StatelessWidget {
+  final TextEditingController precioCompraController;
+  final TextEditingController notasController;
+  final LanguageProvider languageProvider;
+
+  const _AdditionalInfoCard({
+    required this.precioCompraController,
+    required this.notasController,
+    required this.languageProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSizes.paddingM),
+        child: Column(
+          children: [
+            // Precio de compra del lote
+            TextFormField(
+              controller: precioCompraController,
+              decoration: InputDecoration(
+                labelText: languageProvider.translate('purchase_price_optional'),
+                hintText: '0',
+                prefixIcon: const Icon(Icons.attach_money),
+                prefixText: '\$ ',
+                helperText: languageProvider.translate('specific_price_this_lote'),
+              ),
+              style: const TextStyle(fontSize: AppSizes.textL),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            
+            const SizedBox(height: AppSizes.paddingM),
+            
+            // Notas
+            TextFormField(
+              controller: notasController,
+              decoration: InputDecoration(
+                labelText: languageProvider.translate('notes_optional'),
+                hintText: languageProvider.translate('observations_about_lote'),
+                prefixIcon: const Icon(Icons.note),
+              ),
+              style: const TextStyle(fontSize: AppSizes.textL),
+              maxLines: 3,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Widget para botones de acción
+class _ActionButtons extends StatelessWidget {
+  final bool isLoading;
+  final VoidCallback onCancel;
+  final VoidCallback onSave;
+  final LanguageProvider languageProvider;
+
+  const _ActionButtons({
+    required this.isLoading,
+    required this.onCancel,
+    required this.onSave,
+    required this.languageProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Botón cancelar
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: isLoading ? null : onCancel,
+            icon: const Icon(Icons.cancel),
+            label: Text(
+              languageProvider.translate('cancel'),
+              style: const TextStyle(fontSize: AppSizes.textL),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingM),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSizes.paddingM),
+        // Botón guardar
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: isLoading ? null : onSave,
+            icon: const Icon(Icons.add_box),
+            label: Text(
+              languageProvider.translate('add_lote'),
+              style: const TextStyle(fontSize: AppSizes.textL),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.textOnPrimary,
+              padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingM),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Widget para filas de información
 class _InfoRow extends StatelessWidget {
   final String label;
   final String value;

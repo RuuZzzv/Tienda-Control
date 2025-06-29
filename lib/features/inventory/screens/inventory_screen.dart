@@ -5,12 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../providers/inventory_provider.dart';
 import '../../products/models/product.dart';
 import '../../products/models/lote.dart';
-import '../../products/models/lote_extensions.dart';
-import '../widgets/product_inventory_card.dart';
-import '../widgets/lote_card.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_sizes.dart';
-import '../../../core/providers/language_provider.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});

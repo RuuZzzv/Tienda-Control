@@ -104,7 +104,7 @@ class ProductCard extends StatelessWidget {
                         // Código y categoría
                         Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.qr_code,
                               size: AppSizes.iconS,
                               color: AppColors.textTertiary,
@@ -119,7 +119,7 @@ class ProductCard extends StatelessWidget {
                             ),
                             if (product.categoriaNombre != null) ...[
                               const SizedBox(width: AppSizes.paddingM),
-                              Icon(
+                              const Icon(
                                 Icons.category,
                                 size: AppSizes.iconS,
                                 color: AppColors.textTertiary,
