@@ -1,4 +1,4 @@
-// lib/features/products/widgets/product_filters.dart
+// lib/features/products/widgets/product_filters.dart - CORREGIDO
 import 'package:flutter/material.dart';
 import '../models/categoria.dart';
 import '../../../core/constants/app_colors.dart';
@@ -43,6 +43,7 @@ class ProductFilters extends StatelessWidget {
 
     return Container(
       color: AppColors.surface,
+      padding: const EdgeInsets.only(bottom: AppSizes.paddingS),
       child: Column(
         children: [
           // Barra de búsqueda
@@ -51,11 +52,12 @@ class ProductFilters extends StatelessWidget {
             child: TextField(
               controller: searchController,
               decoration: InputDecoration(
-                hintText: languageProvider.translate('search_products'),
-                prefixIcon: const Icon(Icons.search),
+                hintText: 'Buscar productos...',
+                hintStyle: const TextStyle(fontSize: AppSizes.textL),
+                prefixIcon: const Icon(Icons.search, size: AppSizes.iconL),
                 suffixIcon: searchController.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear),
+                        icon: const Icon(Icons.clear, size: AppSizes.iconM),
                         onPressed: () {
                           searchController.clear();
                           onSearchChanged('');
@@ -64,110 +66,162 @@ class ProductFilters extends StatelessWidget {
                     : null,
                 filled: true,
                 fillColor: AppColors.background,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppSizes.paddingL,
+                  vertical: AppSizes.paddingM,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSizes.inputRadius),
+                  borderSide: BorderSide.none,
+                ),
               ),
+              style: const TextStyle(fontSize: AppSizes.textL),
               onChanged: onSearchChanged,
             ),
           ),
 
-          // Filtros horizontales
-          Container(
-            height: 50,
+          // Botón de filtros
+          Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSizes.paddingM),
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+            child: Row(
               children: [
-                // Botón de filtros
-                FilterChip(
-                  label: Row(
-                    children: [
-                      const Icon(Icons.filter_list, size: AppSizes.iconS),
-                      const SizedBox(width: AppSizes.paddingXS),
-                      Text(languageProvider.translate('filters')),
-                      if (hasActiveFilters) ...[
-                        const SizedBox(width: AppSizes.paddingXS),
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            _getActiveFiltersCount().toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: AppSizes.textXS,
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showFilterDialog(context, languageProvider),
+                    icon: const Icon(Icons.filter_list, size: AppSizes.iconM),
+                    label: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'Filtros',
+                          style: TextStyle(fontSize: AppSizes.textL),
+                        ),
+                        if (hasActiveFilters) ...[
+                          const SizedBox(width: AppSizes.paddingS),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSizes.paddingS,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              _getActiveFiltersCount().toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: AppSizes.textS,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
-                  ),
-                  onSelected: (_) => _showFilterDialog(context, languageProvider),
-                  selected: hasActiveFilters,
-                  selectedColor: AppColors.primary.withOpacity(0.2),
-                ),
-                
-                const SizedBox(width: AppSizes.paddingS),
-                
-                // Chips de filtros activos
-                if (selectedCategoriaId != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: AppSizes.paddingS),
-                    child: Chip(
-                      label: Text(
-                        categorias.firstWhere(
-                          (c) => c.id == selectedCategoriaId,
-                          orElse: () => Categoria(nombre: 'Categoría'),
-                        ).nombre,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingM),
+                      side: BorderSide(
+                        color: hasActiveFilters ? AppColors.primary : AppColors.divider,
+                        width: hasActiveFilters ? 2 : 1,
                       ),
-                      onDeleted: () => onCategoryChanged(null),
-                      deleteIcon: const Icon(Icons.close, size: AppSizes.iconS),
+                      backgroundColor: hasActiveFilters 
+                          ? AppColors.primary.withOpacity(0.05) 
+                          : Colors.transparent,
                     ),
                   ),
-                
-                if (showLowStockOnly)
-                  Padding(
-                    padding: const EdgeInsets.only(right: AppSizes.paddingS),
-                    child: Chip(
-                      label: Text(languageProvider.translate('low_stock')),
-                      onDeleted: () => onLowStockChanged(false),
-                      deleteIcon: const Icon(Icons.close, size: AppSizes.iconS),
-                      backgroundColor: AppColors.warning.withOpacity(0.2),
-                    ),
-                  ),
-                
-                if (showOutOfStock)
-                  Padding(
-                    padding: const EdgeInsets.only(right: AppSizes.paddingS),
-                    child: Chip(
-                      label: Text(languageProvider.translate('out_of_stock')),
-                      onDeleted: () => onOutOfStockChanged(false),
-                      deleteIcon: const Icon(Icons.close, size: AppSizes.iconS),
-                      backgroundColor: AppColors.error.withOpacity(0.2),
-                    ),
-                  ),
-                
-                if (sortBy != 'name')
-                  Padding(
-                    padding: const EdgeInsets.only(right: AppSizes.paddingS),
-                    child: Chip(
-                      label: Text(_getSortLabel(sortBy, languageProvider)),
-                      onDeleted: () => onSortChanged('name'),
-                      deleteIcon: const Icon(Icons.close, size: AppSizes.iconS),
-                    ),
-                  ),
-                
-                if (hasActiveFilters)
-                  ActionChip(
-                    label: Text(languageProvider.translate('clear_all')),
-                    onPressed: onClearFilters,
-                    backgroundColor: AppColors.error.withOpacity(0.1),
-                  ),
+                ),
               ],
             ),
           ),
           
-          const Divider(height: 1),
+          // Chips de filtros activos
+          if (hasActiveFilters)
+            Container(
+              height: 40,
+              margin: const EdgeInsets.only(top: AppSizes.paddingS),
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: AppSizes.paddingM),
+                children: [
+                  if (selectedCategoriaId != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: AppSizes.paddingS),
+                      child: Chip(
+                        label: Text(
+                          categorias.firstWhere(
+                            (c) => c.id == selectedCategoriaId,
+                            orElse: () => Categoria(nombre: 'Categoría'),
+                          ).nombre,
+                          style: const TextStyle(fontSize: AppSizes.textM),
+                        ),
+                        onDeleted: () => onCategoryChanged(null),
+                        deleteIcon: const Icon(Icons.close, size: AppSizes.iconS),
+                        backgroundColor: AppColors.primary.withOpacity(0.1),
+                        deleteIconColor: AppColors.primary,
+                      ),
+                    ),
+                  
+                  if (showLowStockOnly)
+                    Padding(
+                      padding: const EdgeInsets.only(right: AppSizes.paddingS),
+                      child: Chip(
+                        label: const Text(
+                          'Stock Bajo',
+                          style: TextStyle(fontSize: AppSizes.textM),
+                        ),
+                        onDeleted: () => onLowStockChanged(false),
+                        deleteIcon: const Icon(Icons.close, size: AppSizes.iconS),
+                        backgroundColor: AppColors.warning.withOpacity(0.2),
+                        deleteIconColor: AppColors.warning,
+                      ),
+                    ),
+                  
+                  if (showOutOfStock)
+                    Padding(
+                      padding: const EdgeInsets.only(right: AppSizes.paddingS),
+                      child: Chip(
+                        label: const Text(
+                          'Sin Stock',
+                          style: TextStyle(fontSize: AppSizes.textM),
+                        ),
+                        onDeleted: () => onOutOfStockChanged(false),
+                        deleteIcon: const Icon(Icons.close, size: AppSizes.iconS),
+                        backgroundColor: AppColors.error.withOpacity(0.2),
+                        deleteIconColor: AppColors.error,
+                      ),
+                    ),
+                  
+                  if (sortBy != 'name')
+                    Padding(
+                      padding: const EdgeInsets.only(right: AppSizes.paddingS),
+                      child: Chip(
+                        label: Text(
+                          _getSortLabel(sortBy),
+                          style: const TextStyle(fontSize: AppSizes.textM),
+                        ),
+                        onDeleted: () => onSortChanged('name'),
+                        deleteIcon: const Icon(Icons.close, size: AppSizes.iconS),
+                        backgroundColor: AppColors.accent.withOpacity(0.1),
+                        deleteIconColor: AppColors.accent,
+                      ),
+                    ),
+                  
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSizes.paddingS),
+                    child: ActionChip(
+                      label: const Text(
+                        'Limpiar todo',
+                        style: TextStyle(fontSize: AppSizes.textM),
+                      ),
+                      onPressed: onClearFilters,
+                      backgroundColor: AppColors.error.withOpacity(0.1),
+                      labelStyle: const TextStyle(color: AppColors.error),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -190,14 +244,14 @@ class ProductFilters extends StatelessWidget {
     return count;
   }
 
-  String _getSortLabel(String sort, LanguageProvider languageProvider) {
+  String _getSortLabel(String sort) {
     switch (sort) {
       case 'stock':
-        return languageProvider.translate('sort_by_stock');
+        return 'Ordenar por Stock';
       case 'price':
-        return languageProvider.translate('sort_by_price');
+        return 'Ordenar por Precio';
       default:
-        return languageProvider.translate('sort_by_name');
+        return 'Ordenar por Nombre';
     }
   }
 
@@ -223,6 +277,7 @@ class ProductFilters extends StatelessWidget {
   }
 }
 
+// Diálogo de filtros simplificado
 class _FilterDialog extends StatefulWidget {
   final int? selectedCategoriaId;
   final bool showLowStockOnly;
@@ -289,11 +344,11 @@ class _FilterDialogState extends State<_FilterDialog> {
             // Handle bar
             Container(
               margin: const EdgeInsets.only(top: AppSizes.paddingM),
-              width: 40,
-              height: 4,
+              width: 60,
+              height: 5,
               decoration: BoxDecoration(
-                color: AppColors.textTertiary,
-                borderRadius: BorderRadius.circular(2),
+                color: AppColors.textTertiary.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(3),
               ),
             ),
             
@@ -302,12 +357,12 @@ class _FilterDialogState extends State<_FilterDialog> {
               padding: const EdgeInsets.all(AppSizes.paddingL),
               child: Row(
                 children: [
-                  const Icon(Icons.filter_list, size: AppSizes.iconL),
+                  const Icon(Icons.filter_list, size: AppSizes.iconXL),
                   const SizedBox(width: AppSizes.paddingM),
-                  Expanded(
+                  const Expanded(
                     child: Text(
-                      widget.languageProvider.translate('filters'),
-                      style: const TextStyle(
+                      'Filtros',
+                      style: TextStyle(
                         fontSize: AppSizes.textXL,
                         fontWeight: FontWeight.bold,
                       ),
@@ -315,7 +370,7 @@ class _FilterDialogState extends State<_FilterDialog> {
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close, size: AppSizes.iconL),
                   ),
                 ],
               ),
@@ -330,14 +385,17 @@ class _FilterDialogState extends State<_FilterDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Categorías
-                    _buildSectionTitle(widget.languageProvider.translate('category')),
+                    _buildSectionTitle('Categoría'),
                     Card(
                       child: Column(
                         children: [
                           RadioListTile<int?>(
                             value: null,
                             groupValue: _tempCategoriaId,
-                            title: Text(widget.languageProvider.translate('all_categories')),
+                            title: const Text(
+                              'Todas las categorías',
+                              style: TextStyle(fontSize: AppSizes.textL),
+                            ),
                             onChanged: (value) {
                               setState(() => _tempCategoriaId = value);
                             },
@@ -346,7 +404,10 @@ class _FilterDialogState extends State<_FilterDialog> {
                           ...widget.categorias.map((categoria) => RadioListTile<int?>(
                             value: categoria.id,
                             groupValue: _tempCategoriaId,
-                            title: Text(categoria.nombre),
+                            title: Text(
+                              categoria.nombre,
+                              style: const TextStyle(fontSize: AppSizes.textL),
+                            ),
                             onChanged: (value) {
                               setState(() => _tempCategoriaId = value);
                             },
@@ -358,13 +419,16 @@ class _FilterDialogState extends State<_FilterDialog> {
                     const SizedBox(height: AppSizes.paddingL),
                     
                     // Estado del stock
-                    _buildSectionTitle(widget.languageProvider.translate('stock_status')),
+                    _buildSectionTitle('Estado del Stock'),
                     Card(
                       child: Column(
                         children: [
                           CheckboxListTile(
                             value: _tempShowLowStock,
-                            title: Text(widget.languageProvider.translate('low_stock_only')),
+                            title: const Text(
+                              'Solo stock bajo',
+                              style: TextStyle(fontSize: AppSizes.textL),
+                            ),
                             secondary: const Icon(Icons.warning, color: AppColors.warning),
                             onChanged: (value) {
                               setState(() => _tempShowLowStock = value ?? false);
@@ -373,7 +437,10 @@ class _FilterDialogState extends State<_FilterDialog> {
                           const Divider(height: 1),
                           CheckboxListTile(
                             value: _tempShowOutOfStock,
-                            title: Text(widget.languageProvider.translate('out_of_stock_only')),
+                            title: const Text(
+                              'Solo sin stock',
+                              style: TextStyle(fontSize: AppSizes.textL),
+                            ),
                             secondary: const Icon(Icons.remove_circle, color: AppColors.error),
                             onChanged: (value) {
                               setState(() => _tempShowOutOfStock = value ?? false);
@@ -386,14 +453,17 @@ class _FilterDialogState extends State<_FilterDialog> {
                     const SizedBox(height: AppSizes.paddingL),
                     
                     // Ordenar por
-                    _buildSectionTitle(widget.languageProvider.translate('sort_by')),
+                    _buildSectionTitle('Ordenar por'),
                     Card(
                       child: Column(
                         children: [
                           RadioListTile<String>(
                             value: 'name',
                             groupValue: _tempSortBy,
-                            title: Text(widget.languageProvider.translate('name')),
+                            title: const Text(
+                              'Nombre',
+                              style: TextStyle(fontSize: AppSizes.textL),
+                            ),
                             secondary: const Icon(Icons.sort_by_alpha),
                             onChanged: (value) {
                               setState(() => _tempSortBy = value!);
@@ -403,7 +473,10 @@ class _FilterDialogState extends State<_FilterDialog> {
                           RadioListTile<String>(
                             value: 'stock',
                             groupValue: _tempSortBy,
-                            title: Text(widget.languageProvider.translate('stock')),
+                            title: const Text(
+                              'Stock',
+                              style: TextStyle(fontSize: AppSizes.textL),
+                            ),
                             secondary: const Icon(Icons.inventory),
                             onChanged: (value) {
                               setState(() => _tempSortBy = value!);
@@ -413,7 +486,10 @@ class _FilterDialogState extends State<_FilterDialog> {
                           RadioListTile<String>(
                             value: 'price',
                             groupValue: _tempSortBy,
-                            title: Text(widget.languageProvider.translate('price')),
+                            title: const Text(
+                              'Precio',
+                              style: TextStyle(fontSize: AppSizes.textL),
+                            ),
                             secondary: const Icon(Icons.attach_money),
                             onChanged: (value) {
                               setState(() => _tempSortBy = value!);
@@ -456,7 +532,13 @@ class _FilterDialogState extends State<_FilterDialog> {
                         widget.onClearFilters();
                         Navigator.pop(context);
                       },
-                      child: Text(widget.languageProvider.translate('clear')),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingL),
+                      ),
+                      child: const Text(
+                        'Limpiar',
+                        style: TextStyle(fontSize: AppSizes.textL),
+                      ),
                     ),
                   ),
                   const SizedBox(width: AppSizes.paddingM),
@@ -469,7 +551,13 @@ class _FilterDialogState extends State<_FilterDialog> {
                         widget.onSortChanged(_tempSortBy);
                         Navigator.pop(context);
                       },
-                      child: Text(widget.languageProvider.translate('apply')),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingL),
+                      ),
+                      child: const Text(
+                        'Aplicar',
+                        style: TextStyle(fontSize: AppSizes.textL),
+                      ),
                     ),
                   ),
                 ],

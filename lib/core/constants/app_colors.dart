@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
+  // Prevenir instanciación
+  AppColors._();
+
   // 🟡 PALETA PRINCIPAL CON AMARILLO
   static const Color primary = Color(0xFF1E3A8A);        // Azul marino profundo
   static const Color primaryLight = Color(0xFF3B82F6);   // Azul brillante
@@ -53,33 +56,36 @@ class AppColors {
   static const Color shadow = Color(0x1A000000);         // Sombra suave
   static const Color overlay = Color(0x80000000);        // Overlay modal
   
-  // 🌟 GRADIENTES
-  static const LinearGradient primaryGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [
-      Color(0xFF3B82F6),
-      Color(0xFF1E3A8A),
-    ],
-  );
+  // 🌟 GRADIENTES - Lazy loading para mejorar rendimiento
+  static LinearGradient? _primaryGradient;
+  static LinearGradient get primaryGradient {
+    _primaryGradient ??= const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFF3B82F6), Color(0xFF1E3A8A)],
+    );
+    return _primaryGradient!;
+  }
   
-  static const LinearGradient accentGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [
-      Color(0xFFFBBF24),
-      Color(0xFFFDBA74),
-    ],
-  );
+  static LinearGradient? _accentGradient;
+  static LinearGradient get accentGradient {
+    _accentGradient ??= const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFFFBBF24), Color(0xFFFDBA74)],
+    );
+    return _accentGradient!;
+  }
   
-  static const LinearGradient successGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [
-      Color(0xFF10B981),
-      Color(0xFF047857),
-    ],
-  );
+  static LinearGradient? _successGradient;
+  static LinearGradient get successGradient {
+    _successGradient ??= const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFF10B981), Color(0xFF047857)],
+    );
+    return _successGradient!;
+  }
   
   // 🎨 PALETA PARA GRÁFICOS Y CHARTS
   static const List<Color> chartColors = [
@@ -97,4 +103,164 @@ class AppColors {
   static const Color darkBackground = Color(0xFF0F172A);
   static const Color darkSurface = Color(0xFF1E293B);
   static const Color darkTextPrimary = Color(0xFFF1F5F9);
+  
+  // 🎨 MATERIAL COLOR SWATCH - Lazy loading para temas
+  static MaterialColor? _primarySwatch;
+  static MaterialColor get primarySwatch {
+    _primarySwatch ??= MaterialColor(
+      primary.value,
+      const {
+        50: Color(0xFFE7F0FF),
+        100: Color(0xFFC3D9FE),
+        200: Color(0xFF93BBFD),
+        300: Color(0xFF629DFC),
+        400: Color(0xFF3B82F6),
+        500: Color(0xFF1E3A8A),
+        600: Color(0xFF1A2F6F),
+        700: Color(0xFF162558),
+        800: Color(0xFF111B42),
+        900: Color(0xFF0D1430),
+      },
+    );
+    return _primarySwatch!;
+  }
+
+  static MaterialColor? _accentSwatch;
+  static MaterialColor get accentSwatch {
+    _accentSwatch ??= MaterialColor(
+      accent.value,
+      const {
+        50: Color(0xFFFFFBEB),
+        100: Color(0xFFFEF3C7),
+        200: Color(0xFFFDE68A),
+        300: Color(0xFFFCD34D),
+        400: Color(0xFFFBBF24),
+        500: Color(0xFFFDBA74),
+        600: Color(0xFFD97706),
+        700: Color(0xFFB45309),
+        800: Color(0xFF92400E),
+        900: Color(0xFF78350F),
+      },
+    );
+    return _accentSwatch!;
+  }
+
+  // 🎯 MÉTODOS HELPER para facilitar el uso
+  
+  /// Obtiene un color con opacidad
+  static Color withOpacity(Color color, double opacity) {
+    return color.withOpacity(opacity);
+  }
+
+  /// Determina si un color es claro u oscuro
+  static bool isLight(Color color) {
+    return color.computeLuminance() > 0.5;
+  }
+
+  /// Obtiene el color de texto apropiado para un fondo
+  static Color getTextColorFor(Color backgroundColor) {
+    return isLight(backgroundColor) ? textPrimary : textOnPrimary;
+  }
+
+  /// Obtiene el color de estado según la condición
+  static Color getStatusColor({
+    required bool isOk,
+    required bool isWarning,
+    required bool isError,
+  }) {
+    if (isError) return error;
+    if (isWarning) return warning;
+    if (isOk) return success;
+    return info;
+  }
+
+  // 🎨 SOMBRAS PREDEFINIDAS - Lazy loading
+  static List<BoxShadow>? _cardShadow;
+  static List<BoxShadow> get cardShadow {
+    _cardShadow ??= [
+      BoxShadow(
+        color: shadow,
+        offset: const Offset(0, 2),
+        blurRadius: 4,
+        spreadRadius: 0,
+      ),
+    ];
+    return _cardShadow!;
+  }
+
+  static List<BoxShadow>? _elevatedShadow;
+  static List<BoxShadow> get elevatedShadow {
+    _elevatedShadow ??= [
+      BoxShadow(
+        color: shadow,
+        offset: const Offset(0, 4),
+        blurRadius: 12,
+        spreadRadius: 0,
+      ),
+      BoxShadow(
+        color: shadow.withOpacity(0.08),
+        offset: const Offset(0, 2),
+        blurRadius: 4,
+        spreadRadius: 0,
+      ),
+    ];
+    return _elevatedShadow!;
+  }
+
+  // 🎨 THEME DATA HELPER - Para configuración rápida de temas
+  static ThemeData? _lightTheme;
+  static ThemeData get lightTheme {
+    _lightTheme ??= ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSwatch(
+        primarySwatch: primarySwatch,
+        accentColor: accent,
+        backgroundColor: background,
+        errorColor: error,
+        brightness: Brightness.light,
+      ),
+      scaffoldBackgroundColor: background,
+      cardColor: cardBackground,
+      dividerColor: divider,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: primary,
+        foregroundColor: textOnPrimary,
+        elevation: 0,
+        centerTitle: true,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: textOnPrimary,
+          elevation: 2,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: primary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: error),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      ),
+    );
+    return _lightTheme!;
+  }
 }
