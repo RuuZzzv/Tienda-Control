@@ -55,7 +55,7 @@ class LoteCard extends StatelessWidget {
               _buildExpirationRow(),
 
               // Notas (solo si existen)
-              if (lote.notas != null && lote.notas!.isNotEmpty)
+              if (lote.observaciones != null && lote.observaciones!.isNotEmpty)
                 _buildNotesSection(),
             ],
           ),
@@ -80,7 +80,9 @@ class LoteCard extends StatelessWidget {
           child: _LoteInfo(
             productName: showProductName ? lote.productoNombre : null,
             loteNumber: lote.numeroLote ?? lote.codigoLoteInterno ?? '',
-            ingressDate: _dateFormat.format(lote.fechaIngreso),
+            ingressDate: lote.fechaIngreso != null 
+                ? _dateFormat.format(lote.fechaIngreso!) 
+                : 'Fecha no disponible', // Manejo de nulos
             shouldShowBadge: shouldShowBadge,
             badgeText: shouldShowBadge ? _getUrgentBadgeText() : '',
             badgeColor: statusColor,
@@ -91,7 +93,7 @@ class LoteCard extends StatelessWidget {
         _QuantityDisplay(
           currentQuantity: lote.cantidadActual,
           initialQuantity: lote.cantidadInicial,
-          hasStock: lote.tieneStock,
+          hasStock: lote.cantidadActual > 0, // Cambiado a verificar cantidadActual
         ),
       ],
     );
@@ -131,7 +133,7 @@ class LoteCard extends StatelessWidget {
         ),
         
         // Botón de ajustar
-        if (onAdjust != null && lote.tieneStock)
+        if (onAdjust != null && lote.cantidadActual > 0) // Cambiado a verificar cantidadActual
           IconButton(
             onPressed: onAdjust,
             icon: const Icon(Icons.edit),
@@ -155,19 +157,19 @@ class LoteCard extends StatelessWidget {
   Widget _buildNotesSection() {
     return Padding(
       padding: const EdgeInsets.only(top: AppSizes.paddingS),
-      child: _NotesBox(notes: lote.notas!),
+      child: _NotesBox(notes: lote.observaciones!), // Cambiado a observaciones
     );
   }
 
   // Métodos de cálculo optimizados
   Color _getStatusColor() {
-    if (!lote.tieneStock || lote.estaVencido) return AppColors.error;
+    if (lote.cantidadActual <= 0 || lote.estaVencido) return AppColors.error; // Cambiado a verificar cantidadActual
     if (lote.proximoAVencer) return AppColors.warning;
     return AppColors.success;
   }
 
   IconData _getStatusIcon() {
-    if (!lote.tieneStock) return Icons.remove_circle;
+    if (lote.cantidadActual <= 0) return Icons.remove_circle; // Cambiado a verificar cantidadActual
     if (lote.estaVencido) return Icons.dangerous;
     if (lote.proximoAVencer) return Icons.warning;
     return Icons.batch_prediction;
@@ -176,7 +178,7 @@ class LoteCard extends StatelessWidget {
   bool _shouldHighlight() => lote.estaVencido || lote.proximoAVencer;
 
   bool _shouldShowUrgentBadge() => 
-      (lote.estaVencido || lote.proximoAVencer) && lote.tieneStock;
+      (lote.estaVencido || lote.proximoAVencer) && lote.cantidadActual > 0; // Cambiado a verificar cantidadActual
 
   String _getUrgentBadgeText() {
     if (lote.estaVencido) return 'VENCIDO';
@@ -201,7 +203,7 @@ class LoteCard extends StatelessWidget {
     }
     
     if (lote.proximoAVencer) {
-      final dias = lote.diasParaVencer;
+      final dias = lote.fechaVencimiento!.difference(DateTime.now()).inDays; // Cambiado a calcular días restantes
       switch (dias) {
         case 0:
           return 'Vence hoy';

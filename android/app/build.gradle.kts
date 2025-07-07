@@ -51,18 +51,27 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("debug")
+            
+            // Configuraciones adicionales para evitar errores
+            isDebuggable = false
+            isJniDebuggable = false
         }
     }
     
-    // Configuración de empaquetado
-    packagingOptions {
+    // Configuración de empaquetado (CORREGIDO)
+    packaging {
         resources {
             excludes += listOf(
                 "META-INF/DEPENDENCIES",
                 "META-INF/LICENSE",
                 "META-INF/LICENSE.txt",
                 "META-INF/NOTICE",
-                "META-INF/NOTICE.txt"
+                "META-INF/NOTICE.txt",
+                "META-INF/*.kotlin_module",
+                "**/attach_hotspot_windows.dll",
+                "META-INF/licenses/**",
+                "META-INF/AL2.0",
+                "META-INF/LGPL2.1"
             )
         }
     }
@@ -74,4 +83,8 @@ flutter {
 
 dependencies {
     implementation("androidx.multidex:multidex:2.0.1")
+    
+    // Dependencias adicionales para release estable
+    implementation("androidx.lifecycle:lifecycle-runtime:2.6.2")
+    implementation("androidx.lifecycle:lifecycle-process:2.6.2")
 }

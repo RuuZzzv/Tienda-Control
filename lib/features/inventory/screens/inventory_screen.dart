@@ -1,10 +1,13 @@
-// lib/features/inventory/screens/inventory_screen.dart
+// lib/features/inventory/screens/inventory_screen.dart - IMPORTS CORREGIDOS
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/inventory_provider.dart';
+import '../../products/providers/products_provider.dart'; // ✅ IMPORT AGREGADO
 import '../../products/models/product.dart';
 import '../../products/models/lote.dart';
+import '../../products/models/lote_extensions.dart';
+import '../../products/models/product_extensions.dart';
 import '../../../core/constants/app_colors.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -16,13 +19,12 @@ class InventoryScreen extends StatefulWidget {
 
 class _InventoryScreenState extends State<InventoryScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _currentView = 'productos'; // 'productos', 'stock_bajo', 'vencidos', 'por_vencer'
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<InventoryProvider>().loadInventoryData();
+      context.read<InventoryProvider>().initializeIfNeeded();
     });
   }
 
@@ -30,7 +32,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text(
           'Mi Inventario',
@@ -41,14 +42,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
         ),
         automaticallyImplyLeading: false,
         centerTitle: true,
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle, size: 28),
-            onPressed: () => _showAddLoteDialog(context),
-            tooltip: 'Agregar Stock',
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, size: 28),
+            icon: const Icon(Icons.refresh, size: 26),
             onPressed: () => context.read<InventoryProvider>().refresh(),
             tooltip: 'Actualizar',
           ),
@@ -57,25 +56,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       body: Consumer<InventoryProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    strokeWidth: 8,
-                    color: AppColors.primary,
-                  ),
-                  SizedBox(height: 24),
-                  Text(
-                    'Cargando inventario...',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            );
+            return _buildLoadingState();
           }
 
           if (provider.error != null) {
@@ -84,19 +65,37 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
           return Column(
             children: [
-              // Resumen principal - Cards grandes y simples
-              _buildMainSummary(provider),
-              
-              // Navegación por categorías
-              _buildCategoryNavigation(provider),
-              
-              // Lista de productos/lotes según la vista actual
+              _buildSummaryCards(provider),
+              _buildSimpleNavigation(provider),
               Expanded(
                 child: _buildCurrentView(provider),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            strokeWidth: 4,
+            color: AppColors.primary,
+          ),
+          SizedBox(height: 20),
+          Text(
+            'Cargando inventario...',
+            style: TextStyle(
+              fontSize: 17,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -110,10 +109,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
           children: [
             const Icon(
               Icons.warning_amber,
-              size: 80,
+              size: 70,
               color: AppColors.warning,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             const Text(
               'No se pudo cargar el inventario',
               style: TextStyle(
@@ -127,7 +126,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             Text(
               provider.error!,
               style: const TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 color: AppColors.textSecondary,
               ),
               textAlign: TextAlign.center,
@@ -141,14 +140,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   provider.clearError();
                   provider.refresh();
                 },
-                icon: const Icon(Icons.refresh, size: 24),
+                icon: const Icon(Icons.refresh, size: 26),
                 label: const Text(
-                  'Reintentar',
-                  style: TextStyle(fontSize: 18),
+                  'Intentar de Nuevo',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
             ),
@@ -158,92 +160,59 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _buildMainSummary(InventoryProvider provider) {
-    // Calcular estadísticas directamente para evitar errores
-    final totalProductos = provider.products.length;
-    final productosStockBajo = provider.products.where((p) => 
-      (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)
-    ).length;
-    final lotesVencidos = provider.lotes.where((l) => 
-      l.fechaVencimiento != null && 
-      DateTime.now().isAfter(l.fechaVencimiento!) &&
-      l.cantidadActual > 0
-    ).length;
-    final lotesProximosVencer = provider.lotes.where((l) => 
-      l.fechaVencimiento != null && 
-      !DateTime.now().isAfter(l.fechaVencimiento!) &&
-      l.fechaVencimiento!.difference(DateTime.now()).inDays <= 7 &&
-      l.cantidadActual > 0
-    ).length;
-    
+  Widget _buildSummaryCards(InventoryProvider provider) {
+    final stats = provider.getInventoryStats();
+
     return Container(
-      padding: const EdgeInsets.all(8), // Padding muy reducido
+      padding: const EdgeInsets.all(8),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Título de sección más compacto
-          const Row(
+          Row(
             children: [
-              Icon(Icons.analytics, color: AppColors.primary, size: 18),
-              SizedBox(width: 4),
-              Text(
-                'Resumen',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+              Expanded(
+                child: _ImprovedCard(
+                  title: 'Total Productos',
+                  value: '${stats['totalProductos']}',
+                  icon: Icons.inventory_2,
+                  color: AppColors.primary,
+                  onTap: () => provider.setCurrentFilter('todos'),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _ImprovedCard(
+                  title: 'Con Stock',
+                  value: '${stats['productosStock']}',
+                  icon: Icons.check_circle,
+                  color: AppColors.success,
+                  onTap: () => provider.setCurrentFilter('todos'),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          
-          // Cards principales - 2x2 con diseño compacto
           Row(
             children: [
               Expanded(
-                child: _BigStatCard(
-                  title: 'Productos',
-                  value: '$totalProductos',
-                  icon: Icons.inventory_2,
-                  color: AppColors.info,
-                  isGood: true,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _BigStatCard(
+                child: _ImprovedCard(
                   title: 'Stock Bajo',
-                  value: '$productosStockBajo',
+                  value: '${stats['productosStockBajo']}',
                   icon: Icons.warning,
                   color: AppColors.warning,
-                  isGood: productosStockBajo == 0,
-                  onTap: () => _changeView('stock_bajo'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: _BigStatCard(
-                  title: 'Vencidos',
-                  value: '$lotesVencidos',
-                  icon: Icons.dangerous,
-                  color: AppColors.error,
-                  isGood: lotesVencidos == 0,
-                  onTap: () => _changeView('vencidos'),
+                  isAlert: (stats['productosStockBajo'] as int) > 0,
+                  onTap: () => provider.setCurrentFilter('stock_bajo'),
                 ),
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: _BigStatCard(
-                  title: 'Por Vencer',
-                  value: '$lotesProximosVencer',
-                  icon: Icons.schedule,
-                  color: AppColors.accent,
-                  isGood: lotesProximosVencer == 0,
-                  onTap: () => _changeView('por_vencer'),
+                child: _ImprovedCard(
+                  title: 'Vencidos',
+                  value: '${stats['lotesVencidos']}',
+                  icon: Icons.dangerous,
+                  color: AppColors.error,
+                  isAlert: (stats['lotesVencidos'] as int) > 0,
+                  onTap: () => provider.setCurrentFilter('vencidos'),
                 ),
               ),
             ],
@@ -253,99 +222,80 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _buildCategoryNavigation(InventoryProvider provider) {
-    // Calcular estadísticas para los badges
-    final productosStockBajo = provider.products.where((p) => 
-      (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)
-    ).length;
-    final lotesVencidos = provider.lotes.where((l) => 
-      l.fechaVencimiento != null && 
-      DateTime.now().isAfter(l.fechaVencimiento!) &&
-      l.cantidadActual > 0
-    ).length;
-    
+  Widget _buildSimpleNavigation(InventoryProvider provider) {
+    final stats = provider.getInventoryStats();
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      color: Colors.white,
+      padding: const EdgeInsets.all(8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Barra de búsqueda integrada - sin Container extra
           SizedBox(
-            height: 32,
+            height: 40,
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Buscar...',
-                hintStyle: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
-                prefixIcon: const Icon(Icons.search, size: 14, color: AppColors.textTertiary),
+                hintText: 'Buscar productos...',
+                hintStyle: const TextStyle(fontSize: 14),
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          provider.setSearchQuery('');
+                        },
+                      )
+                    : null,
                 filled: true,
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.divider, width: 1),
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.divider, width: 1),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.primary, width: 1),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
-              style: const TextStyle(fontSize: 11),
-              onChanged: (value) {
-                // TODO: Implementar búsqueda
-              },
+              style: const TextStyle(fontSize: 14),
+              onChanged: (value) => provider.setSearchQuery(value),
             ),
           ),
-          
           const SizedBox(height: 8),
-          
-          // Navegación por pestañas compactas
-          Row(
-            children: [
-              Expanded(
-                child: _CategoryButton(
-                  label: 'Todos',
-                  icon: Icons.list_alt,
-                  isSelected: _currentView == 'productos',
-                  onTap: () => _changeView('productos'),
+          SizedBox(
+            height: 50,
+            child: Row(
+              children: [
+                Expanded(
+                  child: _ImprovedTabButton(
+                    label: 'Todos',
+                    icon: Icons.list_alt,
+                    isSelected: provider.currentFilter == 'todos',
+                    onTap: () => provider.setCurrentFilter('todos'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 3),
-              Expanded(
-                child: _CategoryButton(
-                  label: 'Stock Bajo',
-                  icon: Icons.warning,
-                  isSelected: _currentView == 'stock_bajo',
-                  onTap: () => _changeView('stock_bajo'),
-                  badgeCount: productosStockBajo,
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _ImprovedTabButton(
+                    label: 'Stock Bajo',
+                    icon: Icons.warning,
+                    isSelected: provider.currentFilter == 'stock_bajo',
+                    badgeCount: stats['productosStockBajo'] as int?,
+                    onTap: () => provider.setCurrentFilter('stock_bajo'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 3),
-              Expanded(
-                child: _CategoryButton(
-                  label: 'Vencidos',
-                  icon: Icons.dangerous,
-                  isSelected: _currentView == 'vencidos',
-                  onTap: () => _changeView('vencidos'),
-                  badgeCount: lotesVencidos,
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _ImprovedTabButton(
+                    label: 'Vencidos',
+                    icon: Icons.dangerous,
+                    isSelected: provider.currentFilter == 'vencidos',
+                    badgeCount: stats['lotesVencidos'] as int?,
+                    onTap: () => provider.setCurrentFilter('vencidos'),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -353,30 +303,40 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Widget _buildCurrentView(InventoryProvider provider) {
-    switch (_currentView) {
-      case 'productos':
+    switch (provider.currentFilter) {
+      case 'todos':
         return _buildAllProductsList(provider);
       case 'stock_bajo':
         return _buildLowStockList(provider);
       case 'vencidos':
-        return _buildExpiredList(provider);
+        return _buildExpiredLotesList(provider);
       case 'por_vencer':
-        return _buildExpiringList(provider);
+        return _buildExpiringLotesList(provider);
       default:
         return _buildAllProductsList(provider);
     }
   }
 
   Widget _buildAllProductsList(InventoryProvider provider) {
-    final products = provider.products;
-    
+    final products = provider.getFilteredProducts();
+
     if (products.isEmpty) {
       return _buildEmptyState(
         icon: Icons.inventory_2_outlined,
-        title: 'No hay productos',
-        subtitle: 'Agrega productos a tu inventario para comenzar',
-        actionLabel: 'Agregar Producto',
-        onAction: () => context.push('/add-product'),
+        title: provider.searchQuery.isNotEmpty
+            ? 'No se encontraron productos'
+            : 'No hay productos',
+        subtitle: provider.searchQuery.isNotEmpty
+            ? 'Intenta con otra búsqueda'
+            : 'Usa el botón + en la navegación inferior para agregar productos',
+        actionLabel:
+            provider.searchQuery.isNotEmpty ? 'Limpiar Búsqueda' : null,
+        onAction: provider.searchQuery.isNotEmpty
+            ? () {
+                _searchController.clear();
+                provider.setSearchQuery('');
+              }
+            : null,
       );
     }
 
@@ -386,7 +346,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         padding: const EdgeInsets.all(16),
         itemCount: products.length,
         itemBuilder: (context, index) {
-          return _SimpleProductCard(
+          return _ImprovedProductCard(
             product: products[index],
             onTap: () => _showProductDetails(products[index], provider),
             onAddStock: () => _showAddLoteDialog(context, products[index]),
@@ -397,17 +357,15 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Widget _buildLowStockList(InventoryProvider provider) {
-    final products = provider.products.where((p) => 
-      (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)
-    ).toList();
-    
+    final products = provider.getFilteredProducts();
+
     if (products.isEmpty) {
       return _buildEmptyState(
         icon: Icons.check_circle,
         title: '¡Excelente!',
         subtitle: 'Todos tus productos tienen stock suficiente',
         actionLabel: 'Ver Todos los Productos',
-        onAction: () => _changeView('productos'),
+        onAction: () => provider.setCurrentFilter('todos'),
       );
     }
 
@@ -417,22 +375,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(10),
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.warning.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.warning),
+              border: Border.all(color: AppColors.warning, width: 2),
             ),
             child: const Row(
               children: [
-                Icon(Icons.warning, color: AppColors.warning, size: 24),
+                Icon(Icons.warning, color: AppColors.warning, size: 26),
                 SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Estos productos necesitan reposición urgente',
+                    'Estos productos necesitan más stock',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 17,
                       fontWeight: FontWeight.bold,
                       color: AppColors.warning,
                     ),
@@ -446,10 +404,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: products.length,
               itemBuilder: (context, index) {
-                return _SimpleProductCard(
+                return _ImprovedProductCard(
                   product: products[index],
                   onTap: () => _showProductDetails(products[index], provider),
-                  onAddStock: () => _showAddLoteDialog(context, products[index]),
+                  onAddStock: () =>
+                      _showAddLoteDialog(context, products[index]),
                   showUrgentBadge: true,
                 );
               },
@@ -460,20 +419,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _buildExpiredList(InventoryProvider provider) {
-    final expiredLotes = provider.lotes.where((l) => 
-      l.fechaVencimiento != null && 
-      DateTime.now().isAfter(l.fechaVencimiento!) &&
-      l.cantidadActual > 0
-    ).toList();
-    
-    if (expiredLotes.isEmpty) {
+  Widget _buildExpiredLotesList(InventoryProvider provider) {
+    final lotes = provider.getFilteredLotes();
+
+    if (lotes.isEmpty) {
       return _buildEmptyState(
         icon: Icons.check_circle,
         title: '¡Perfecto!',
         subtitle: 'No tienes productos vencidos',
         actionLabel: 'Ver Inventario',
-        onAction: () => _changeView('productos'),
+        onAction: () => provider.setCurrentFilter('todos'),
       );
     }
 
@@ -483,22 +438,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(10),
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.error.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.error),
+              border: Border.all(color: AppColors.error, width: 2),
             ),
             child: const Row(
               children: [
-                Icon(Icons.dangerous, color: AppColors.error, size: 24),
+                Icon(Icons.dangerous, color: AppColors.error, size: 26),
                 SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Productos vencidos - Retirar de la venta',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 17,
                       fontWeight: FontWeight.bold,
                       color: AppColors.error,
                     ),
@@ -510,11 +465,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: expiredLotes.length,
+              itemCount: lotes.length,
               itemBuilder: (context, index) {
-                return _SimpleLoteCard(
-                  lote: expiredLotes[index],
-                  onTap: () => _showLoteDetails(expiredLotes[index], provider),
+                return _ImprovedLoteCard(
+                  lote: lotes[index],
+                  onTap: () => _showLoteOptions(lotes[index], provider),
                   showExpiredBadge: true,
                 );
               },
@@ -525,72 +480,36 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _buildExpiringList(InventoryProvider provider) {
-    final expiringLotes = provider.lotes.where((l) => 
-      l.fechaVencimiento != null && 
-      !DateTime.now().isAfter(l.fechaVencimiento!) &&
-      l.fechaVencimiento!.difference(DateTime.now()).inDays <= 7 &&
-      l.cantidadActual > 0
-    ).toList();
-    
-    if (expiringLotes.isEmpty) {
+  Widget _buildExpiringLotesList(InventoryProvider provider) {
+    final lotes = provider.expiringLotes;
+
+    if (lotes.isEmpty) {
       return _buildEmptyState(
         icon: Icons.check_circle,
         title: '¡Todo bien!',
         subtitle: 'No tienes productos próximos a vencer',
         actionLabel: 'Ver Inventario',
-        onAction: () => _changeView('productos'),
+        onAction: () => provider.setCurrentFilter('todos'),
       );
     }
 
     return RefreshIndicator(
       onRefresh: provider.refresh,
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(10),
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.accent),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.schedule, color: AppColors.accent, size: 24),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Productos que vencen pronto - Ofertar',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.accent,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: expiringLotes.length,
-              itemBuilder: (context, index) {
-                return _SimpleLoteCard(
-                  lote: expiringLotes[index],
-                  onTap: () => _showLoteDetails(expiringLotes[index], provider),
-                  showExpiringBadge: true,
-                );
-              },
-            ),
-          ),
-        ],
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: lotes.length,
+        itemBuilder: (context, index) {
+          return _ImprovedLoteCard(
+            lote: lotes[index],
+            onTap: () => _showLoteOptions(lotes[index], provider),
+            showExpiringBadge: true,
+          );
+        },
       ),
     );
   }
 
+  // ✅ FUNCIÓN COMPLETAMENTE CORREGIDA - SIN OVERFLOW GARANTIZADO
   Widget _buildEmptyState({
     required IconData icon,
     required String title,
@@ -598,206 +517,264 @@ class _InventoryScreenState extends State<InventoryScreen> {
     String? actionLabel,
     VoidCallback? onAction,
   }) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 20,
+        bottom: MediaQuery.of(context).viewPadding.bottom +
+            200, // ✅ INCREMENTADO A 200px
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.of(context).size.height *
+              0.4, // ✅ ALTURA MÍNIMA CONTROLADA
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 70,
+              size: 60, // ✅ MÁS COMPACTO: 70 → 60
               color: AppColors.textTertiary,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16), // ✅ REDUCIDO: 20 → 16
             Text(
               title,
               style: const TextStyle(
-                fontSize: 22,
+                fontSize: 18, // ✅ REDUCIDO: 20 → 18
                 fontWeight: FontWeight.bold,
                 color: AppColors.textPrimary,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 8), // ✅ REDUCIDO: 10 → 8
             Text(
               subtitle,
               style: const TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 color: AppColors.textSecondary,
+                height: 1.4,
               ),
               textAlign: TextAlign.center,
             ),
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 20),
+              const SizedBox(height: 24), // ✅ REDUCIDO: 28 → 24
               SizedBox(
                 width: double.infinity,
-                height: 48,
+                height: 44, // ✅ REDUCIDO: 48 → 44
                 child: ElevatedButton(
                   onPressed: onAction,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius:
+                          BorderRadius.circular(10), // ✅ REDUCIDO: 12 → 10
                     ),
                   ),
                   child: Text(
                     actionLabel,
-                    style: const TextStyle(fontSize: 16),
+                    style: const TextStyle(
+                      fontSize: 15, // ✅ REDUCIDO: 16 → 15
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
             ],
+            const SizedBox(height: 20), // ✅ ESPACIO ADICIONAL DE SEGURIDAD
           ],
         ),
       ),
     );
   }
 
-  void _changeView(String view) {
-    setState(() {
-      _currentView = view;
-    });
+  // ✅ FUNCIÓN CORREGIDA: Verificar ProductsProvider correctamente
+  void navigateToAddLote(BuildContext context, [Product? product]) {
+    // ✅ CORREGIDO: Usar try-catch para manejar errores de Provider
+    try {
+      final productsProvider = context.read<ProductsProvider>();
+
+      // Verificar si hay productos disponibles
+      if (product == null && productsProvider.products.isEmpty) {
+        _showNoProductsDialog(context);
+      } else {
+        // Hay productos, navegar normalmente
+        context.push('/add-lote', extra: product);
+      }
+    } catch (e) {
+      // ✅ FALLBACK: Si ProductsProvider no está disponible
+      print('Error accediendo a ProductsProvider: $e');
+      _showNoProductsDialog(context);
+    }
   }
 
-  void _showAddLoteDialog(BuildContext context, [Product? product]) {
-    context.push('/add-lote', extra: product);
-  }
-
-  void _showProductDetails(Product product, InventoryProvider provider) {
-    final lotes = provider.getLotesForProduct(product.id!);
-    
-    showModalBottomSheet(
+  // ✅ FUNCIÓN EXTRAÍDA: Mostrar diálogo de productos faltantes
+  void _showNoProductsDialog(BuildContext context) {
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: AppColors.warning, size: 28),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'No hay productos registrados',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Para agregar un lote, primero debes registrar al menos un producto.',
+              style: TextStyle(fontSize: 16, height: 1.4),
+            ),
+            SizedBox(height: 16),
+            Text(
+              '¿Qué te gustaría hacer?',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                context.push('/add-product');
+              },
+              icon: const Icon(Icons.add_circle, size: 20),
+              label: const Text(
+                'Agregar Primer Producto',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
             ),
           ),
-          child: Column(
-            children: [
-              // Handle bar
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 50,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: AppColors.textTertiary,
-                  borderRadius: BorderRadius.circular(2.5),
-                ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.close, size: 20),
+              label: const Text(
+                'Cancelar',
+                style: TextStyle(fontSize: 16),
               ),
-              
-              // Header
-              Container(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    Text(
-                      product.nombre,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _DetailChip(
-                          label: 'Stock Total',
-                          value: '${product.stockActual ?? 0}',
-                          color: (product.stockActual ?? 0) <= (product.stockMinimo ?? 0) 
-                              ? AppColors.warning 
-                              : AppColors.success,
-                        ),
-                        _DetailChip(
-                          label: 'Stock Mínimo',
-                          value: '${product.stockMinimo ?? 0}',
-                          color: AppColors.info,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-              
-              // Lotes
-              Expanded(
-                child: lotes.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No hay lotes registrados',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: AppColors.textTertiary,
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        itemCount: lotes.length,
-                        itemBuilder: (context, index) {
-                          return _SimpleLoteCard(
-                            lote: lotes[index],
-                            onTap: () => _showLoteDetails(lotes[index], provider),
-                            showProductName: false,
-                          );
-                        },
-                      ),
-              ),
-              
-              // Botón agregar stock
-              Container(
-                padding: const EdgeInsets.all(20),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showAddLoteDialog(context, product);
-                    },
-                    icon: const Icon(Icons.add_circle, size: 24),
-                    label: const Text(
-                      'Agregar Stock',
-                      style: TextStyle(fontSize: 18),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  void _showLoteDetails(Lote lote, InventoryProvider provider) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Próximamente: Detalles del lote'),
-        duration: Duration(seconds: 2),
+  void _showAddLoteDialog(BuildContext context, [Product? product]) {
+    navigateToAddLote(context, product);
+  }
+
+  void _showProductDetails(Product product, InventoryProvider provider) {
+    final lotes = provider.getLotesForProduct(product.id!);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ProductDetailsModal(
+        product: product,
+        lotes: lotes,
+        onAddStock: () {
+          Navigator.pop(context);
+          _showAddLoteDialog(context, product);
+        },
+      ),
+    );
+  }
+
+  void _showLoteOptions(Lote lote, InventoryProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => _LoteOptionsModal(
+        lote: lote,
+        onMarkExpired: () async {
+          Navigator.pop(context);
+          final success = await provider.markLoteAsExpired(
+            lote.id!,
+            'Marcado como vencido por el usuario',
+          );
+
+          if (success && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Lote marcado como vencido'),
+                backgroundColor: AppColors.success,
+              ),
+            );
+          } else if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(provider.error ?? 'Error al marcar como vencido'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        },
+        onAdjustStock: () {
+          Navigator.pop(context);
+          _showAdjustStockDialog(lote, provider);
+        },
+      ),
+    );
+  }
+
+  void _showAdjustStockDialog(Lote lote, InventoryProvider provider) {
+    showDialog(
+      context: context,
+      builder: (context) => _AdjustStockDialog(
+        lote: lote,
+        onAdjust: (nuevaCantidad, motivo) async {
+          final success = await provider.adjustLoteStock(
+            loteId: lote.id!,
+            nuevaCantidad: nuevaCantidad,
+            motivo: motivo,
+          );
+
+          if (success && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Stock ajustado correctamente'),
+                backgroundColor: AppColors.success,
+              ),
+            );
+          } else if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(provider.error ?? 'Error al ajustar stock'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        },
       ),
     );
   }
@@ -809,61 +786,71 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 }
 
-// Widget para las cards de estadísticas principales
-class _BigStatCard extends StatelessWidget {
+// Widget para cards del resumen - VERSIÓN MUY COMPACTA
+class _ImprovedCard extends StatelessWidget {
   final String title;
   final String value;
   final IconData icon;
   final Color color;
-  final bool isGood;
+  final bool isAlert;
   final VoidCallback? onTap;
 
-  const _BigStatCard({
+  const _ImprovedCard({
     required this.title,
     required this.value,
     required this.icon,
     required this.color,
-    required this.isGood,
+    this.isAlert = false,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 2, // Reducido
+      margin: EdgeInsets.zero, // Sin margin extra
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isAlert
+            ? BorderSide(color: color, width: 1.5) // Borde más delgado
+            : BorderSide.none,
+      ),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.all(6),
-          height: 80,
+          padding: const EdgeInsets.all(8), // Muy reducido
+          height: 85, // ALTURA MUY COMPACTA
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Fila con icono y flecha
+              // Fila de icono y flecha
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(icon, size: 18, color: color),
+                  Icon(icon, size: 20, color: color), // Muy reducido
                   if (onTap != null)
-                    const Icon(Icons.arrow_forward_ios, size: 10, color: AppColors.textTertiary),
+                    const Icon(
+                      Icons.arrow_forward_ios,
+                      size: 12,
+                      color: AppColors.textTertiary,
+                    ),
                 ],
               ),
-              // Número grande
+              // Número principal
               Text(
                 value,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 20, // Muy reducido
                   fontWeight: FontWeight.bold,
-                  color: isGood ? AppColors.success : color,
+                  color: isAlert ? color : AppColors.success,
                 ),
               ),
-              // Título en una sola línea y más pequeño
+              // Título compacto
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 9,
+                  fontSize: 9, // Muy reducido
                   fontWeight: FontWeight.w600,
                   color: AppColors.textSecondary,
                 ),
@@ -879,20 +866,20 @@ class _BigStatCard extends StatelessWidget {
   }
 }
 
-// Widget para botones de categoría
-class _CategoryButton extends StatelessWidget {
+// Widget para botones de pestaña - VERSIÓN MUY COMPACTA
+class _ImprovedTabButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool isSelected;
-  final VoidCallback onTap;
   final int? badgeCount;
+  final VoidCallback onTap;
 
-  const _CategoryButton({
+  const _ImprovedTabButton({
     required this.label,
     required this.icon,
     required this.isSelected,
-    required this.onTap,
     this.badgeCount,
+    required this.onTap,
   });
 
   @override
@@ -900,44 +887,49 @@ class _CategoryButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        height: 50, // ALTURA FIJA MUY COMPACTA
+        padding: const EdgeInsets.symmetric(
+            vertical: 4, horizontal: 2), // Muy reducido
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.divider,
-            width: isSelected ? 2 : 1,
+            color: isSelected ? AppColors.primary : AppColors.border,
+            width: 1.5, // Borde más delgado
           ),
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Icono con badge
             Stack(
+              clipBehavior: Clip.none,
               children: [
                 Icon(
                   icon,
-                  size: 18,
+                  size: 18, // Muy reducido
                   color: isSelected ? Colors.white : AppColors.textSecondary,
                 ),
                 if (badgeCount != null && badgeCount! > 0)
                   Positioned(
-                    right: -2,
-                    top: -2,
+                    right: -6,
+                    top: -6,
                     child: Container(
-                      padding: const EdgeInsets.all(3),
+                      padding: const EdgeInsets.all(2), // Muy reducido
                       decoration: const BoxDecoration(
                         color: AppColors.error,
                         shape: BoxShape.circle,
                       ),
                       constraints: const BoxConstraints(
-                        minWidth: 14,
-                        minHeight: 14,
+                        minWidth: 12,
+                        minHeight: 12,
                       ),
                       child: Text(
                         '$badgeCount',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 9,
+                          fontSize: 8, // Muy reducido
                           fontWeight: FontWeight.bold,
                         ),
                         textAlign: TextAlign.center,
@@ -946,11 +938,12 @@ class _CategoryButton extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2), // Muy reducido
+            // Label compacto
             Text(
               label,
               style: TextStyle(
-                fontSize: 9,
+                fontSize: 10, // Muy reducido
                 fontWeight: FontWeight.w600,
                 color: isSelected ? Colors.white : AppColors.textSecondary,
               ),
@@ -965,14 +958,14 @@ class _CategoryButton extends StatelessWidget {
   }
 }
 
-// Widget simplificado para productos
-class _SimpleProductCard extends StatelessWidget {
+// Widget mejorado para productos
+class _ImprovedProductCard extends StatelessWidget {
   final Product product;
   final VoidCallback onTap;
   final VoidCallback onAddStock;
   final bool showUrgentBadge;
 
-  const _SimpleProductCard({
+  const _ImprovedProductCard({
     required this.product,
     required this.onTap,
     required this.onAddStock,
@@ -981,19 +974,25 @@ class _SimpleProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stockActual = product.stockActual ?? 0;
-    final stockMinimo = product.stockMinimo ?? 0;
-    final isLowStock = stockActual <= stockMinimo;
+    final stockActual = product.stockActualSafe;
+    final stockMinimo = product.stockMinimoSafe;
+    final isLowStock = product.tieneStockBajo;
+    final isOutOfStock = product.sinStock;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: showUrgentBadge
+            ? const BorderSide(color: AppColors.warning, width: 2)
+            : BorderSide.none,
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           child: Row(
             children: [
               // Icono del producto
@@ -1001,17 +1000,25 @@ class _SimpleProductCard extends StatelessWidget {
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  color: isLowStock ? AppColors.warning.withOpacity(0.1) : AppColors.success.withOpacity(0.1),
+                  color: isOutOfStock
+                      ? AppColors.error.withOpacity(0.1)
+                      : isLowStock
+                          ? AppColors.warning.withOpacity(0.1)
+                          : AppColors.success.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   Icons.inventory_2,
-                  size: 32,
-                  color: isLowStock ? AppColors.warning : AppColors.success,
+                  size: 30, // Ligeramente más grande
+                  color: isOutOfStock
+                      ? AppColors.error
+                      : isLowStock
+                          ? AppColors.warning
+                          : AppColors.success,
                 ),
               ),
               const SizedBox(width: 16),
-              
+
               // Información del producto
               Expanded(
                 child: Column(
@@ -1023,53 +1030,10 @@ class _SimpleProductCard extends StatelessWidget {
                           child: Text(
                             product.nombre,
                             style: const TextStyle(
-                              fontSize: 18,
+                              fontSize: 17, // Ligeramente más grande
                               fontWeight: FontWeight.bold,
                               color: AppColors.textPrimary,
                             ),
-                          ),
-                        ),
-                        if (showUrgentBadge)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.warning,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              'URGENTE',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Text(
-                          'Stock: ',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        Text(
-                          '$stockActual',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: isLowStock ? AppColors.warning : AppColors.success,
-                          ),
-                        ),
-                        Text(
-                          ' / Mín: $stockMinimo',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textTertiary,
                           ),
                         ),
                       ],
@@ -1077,7 +1041,7 @@ class _SimpleProductCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
+
               // Botón agregar stock
               Column(
                 children: [
@@ -1085,7 +1049,7 @@ class _SimpleProductCard extends StatelessWidget {
                     onPressed: onAddStock,
                     icon: const Icon(Icons.add_circle),
                     color: AppColors.primary,
-                    iconSize: 32,
+                    iconSize: 30, // Ligeramente más grande
                   ),
                   const Text(
                     'Agregar',
@@ -1105,38 +1069,36 @@ class _SimpleProductCard extends StatelessWidget {
   }
 }
 
-// Widget simplificado para lotes
-class _SimpleLoteCard extends StatelessWidget {
+// Widget mejorado para lotes
+class _ImprovedLoteCard extends StatelessWidget {
   final Lote lote;
   final VoidCallback onTap;
-  final bool showProductName;
   final bool showExpiredBadge;
   final bool showExpiringBadge;
 
-  const _SimpleLoteCard({
+  const _ImprovedLoteCard({
     required this.lote,
     required this.onTap,
-    this.showProductName = true,
     this.showExpiredBadge = false,
     this.showExpiringBadge = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isExpired = lote.fechaVencimiento != null && DateTime.now().isAfter(lote.fechaVencimiento!);
-    final isExpiring = lote.fechaVencimiento != null && 
-                      !isExpired && 
-                      lote.fechaVencimiento!.difference(DateTime.now()).inDays <= 7;
+    final isExpired = lote.estaVencido;
+    final isExpiring = lote.proximoAVencer;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           child: Row(
             children: [
               // Icono del lote
@@ -1144,7 +1106,7 @@ class _SimpleLoteCard extends StatelessWidget {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: isExpired 
+                  color: isExpired
                       ? AppColors.error.withOpacity(0.1)
                       : isExpiring
                           ? AppColors.warning.withOpacity(0.1)
@@ -1153,8 +1115,8 @@ class _SimpleLoteCard extends StatelessWidget {
                 ),
                 child: Icon(
                   Icons.batch_prediction,
-                  size: 28,
-                  color: isExpired 
+                  size: 26, // Ligeramente más grande
+                  color: isExpired
                       ? AppColors.error
                       : isExpiring
                           ? AppColors.warning
@@ -1162,25 +1124,25 @@ class _SimpleLoteCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              
+
               // Información del lote
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (showProductName) ...[
-                      Text(
-                        lote.productoNombre ?? 'Producto',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                    ],
                     Text(
-                      'Lote: ${lote.numeroLote ?? lote.codigoLoteInterno ?? 'Sin número'}',
+                      lote.productoNombre ?? 'Producto',
+                      style: const TextStyle(
+                        fontSize: 17, // Ligeramente más grande
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Lote: ${lote.numeroLoteDisplay}',
                       style: const TextStyle(
                         fontSize: 14,
                         color: AppColors.textSecondary,
@@ -1190,7 +1152,7 @@ class _SimpleLoteCard extends StatelessWidget {
                     Text(
                       'Cantidad: ${lote.cantidadActual}',
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 15, // Ligeramente más grande
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
                       ),
@@ -1198,30 +1160,34 @@ class _SimpleLoteCard extends StatelessWidget {
                     if (lote.fechaVencimiento != null) ...[
                       const SizedBox(height: 4),
                       Text(
-                        isExpired 
-                            ? 'Vencido el ${_formatDate(lote.fechaVencimiento!)}'
-                            : isExpiring
-                                ? 'Vence en ${lote.fechaVencimiento!.difference(DateTime.now()).inDays} días'
-                                : 'Vence: ${_formatDate(lote.fechaVencimiento!)}',
+                        lote.estadoVencimientoTexto,
                         style: TextStyle(
                           fontSize: 14,
-                          color: isExpired 
+                          color: isExpired
                               ? AppColors.error
                               : isExpiring
                                   ? AppColors.warning
                                   : AppColors.textTertiary,
-                          fontWeight: (isExpired || isExpiring) ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight: (isExpired || isExpiring)
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                       ),
                     ],
                   ],
                 ),
               ),
-              
+
               // Badge de estado
-              if (showExpiredBadge || showExpiringBadge || isExpired || isExpiring)
+              if (showExpiredBadge ||
+                  showExpiringBadge ||
+                  isExpired ||
+                  isExpiring)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: isExpired || showExpiredBadge
                         ? AppColors.error
@@ -1243,13 +1209,371 @@ class _SimpleLoteCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
+// Modal de detalles del producto
+class _ProductDetailsModal extends StatelessWidget {
+  final Product product;
+  final List<Lote> lotes;
+  final VoidCallback onAddStock;
+
+  const _ProductDetailsModal({
+    required this.product,
+    required this.lotes,
+    required this.onAddStock,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.5,
+      maxChildSize: 0.9,
+      builder: (context, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 50,
+              height: 5,
+              decoration: BoxDecoration(
+                color: AppColors.textTertiary,
+                borderRadius: BorderRadius.circular(2.5),
+              ),
+            ),
+
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Text(
+                    product.nombre,
+                    style: const TextStyle(
+                      fontSize: 22, // Ligeramente más grande
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _DetailChip(
+                        label: 'Stock Total',
+                        value: '${product.stockActualSafe}',
+                        color: product.sinStock
+                            ? AppColors.error
+                            : product.tieneStockBajo
+                                ? AppColors.warning
+                                : AppColors.success,
+                      ),
+                      _DetailChip(
+                        label: 'Stock Mínimo',
+                        value: '${product.stockMinimoSafe}',
+                        color: AppColors.info,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Lista de lotes
+            Expanded(
+              child: lotes.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No hay lotes registrados',
+                        style: TextStyle(
+                          fontSize: 17, // Ligeramente más grande
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: lotes.length,
+                      itemBuilder: (context, index) {
+                        return _ImprovedLoteCard(
+                          lote: lotes[index],
+                          onTap: () {},
+                        );
+                      },
+                    ),
+            ),
+
+            // Botón agregar stock
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: SizedBox(
+                width: double.infinity,
+                height: 50, // Ligeramente más alto
+                child: ElevatedButton.icon(
+                  onPressed: onAddStock,
+                  icon: const Icon(Icons.add_circle,
+                      size: 26), // Ligeramente más grande
+                  label: const Text(
+                    'Agregar Stock',
+                    style: TextStyle(
+                      fontSize: 17, // Ligeramente más grande
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
-// Widget para chips de detalle
+// Modal de opciones para lotes
+class _LoteOptionsModal extends StatelessWidget {
+  final Lote lote;
+  final VoidCallback onMarkExpired;
+  final VoidCallback onAdjustStock;
+
+  const _LoteOptionsModal({
+    required this.lote,
+    required this.onMarkExpired,
+    required this.onAdjustStock,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle bar
+          Container(
+            width: 50,
+            height: 5,
+            decoration: BoxDecoration(
+              color: AppColors.textTertiary,
+              borderRadius: BorderRadius.circular(2.5),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          const Text(
+            'Opciones del Lote',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            '${lote.productoNombre} - ${lote.numeroLoteDisplay}',
+            style: const TextStyle(
+              fontSize: 16,
+              color: AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+
+          const SizedBox(height: 32),
+
+          // Opciones
+          ListTile(
+            leading: const Icon(Icons.edit,
+                color: AppColors.primary, size: 26), // Ligeramente más grande
+            title: const Text(
+              'Ajustar Cantidad',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600), // Ligeramente más grande
+            ),
+            subtitle: const Text('Cambiar la cantidad actual del lote'),
+            onTap: onAdjustStock,
+          ),
+
+          const Divider(),
+
+          ListTile(
+            leading: const Icon(Icons.dangerous,
+                color: AppColors.error, size: 26), // Ligeramente más grande
+            title: const Text(
+              'Marcar como Vencido',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600), // Ligeramente más grande
+            ),
+            subtitle: const Text('Retirar todo el stock por vencimiento'),
+            onTap: onMarkExpired,
+          ),
+
+          const SizedBox(height: 20),
+
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Diálogo para ajustar stock
+class _AdjustStockDialog extends StatefulWidget {
+  final Lote lote;
+  final Function(int, String) onAdjust;
+
+  const _AdjustStockDialog({
+    required this.lote,
+    required this.onAdjust,
+  });
+
+  @override
+  State<_AdjustStockDialog> createState() => _AdjustStockDialogState();
+}
+
+class _AdjustStockDialogState extends State<_AdjustStockDialog> {
+  final _cantidadController = TextEditingController();
+  final _motivoController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _cantidadController.text = widget.lote.cantidadActual.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text(
+        'Ajustar Stock',
+        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      ),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${widget.lote.productoNombre}\nLote: ${widget.lote.numeroLoteDisplay}',
+              style: const TextStyle(
+                fontSize: 16,
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _cantidadController,
+              decoration: const InputDecoration(
+                labelText: 'Nueva Cantidad',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.inventory),
+              ),
+              style: const TextStyle(fontSize: 16), // Ligeramente más grande
+              keyboardType: TextInputType.number,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Ingrese una cantidad';
+                }
+                final cantidad = int.tryParse(value);
+                if (cantidad == null || cantidad < 0) {
+                  return 'Cantidad inválida';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _motivoController,
+              decoration: const InputDecoration(
+                labelText: 'Motivo',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.note),
+              ),
+              style: const TextStyle(fontSize: 16), // Ligeramente más grande
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Ingrese el motivo del ajuste';
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (_formKey.currentState!.validate()) {
+              final nuevaCantidad = int.parse(_cantidadController.text);
+              final motivo = _motivoController.text.trim();
+
+              Navigator.pop(context);
+              widget.onAdjust(nuevaCantidad, motivo);
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+          ),
+          child: const Text(
+            'Ajustar',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _cantidadController.dispose();
+    _motivoController.dispose();
+    super.dispose();
+  }
+}
+
+// Widget para chips de detalles
 class _DetailChip extends StatelessWidget {
   final String label;
   final String value;
@@ -1266,7 +1590,7 @@ class _DetailChip extends StatelessWidget {
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
             color: color.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
@@ -1275,7 +1599,7 @@ class _DetailChip extends StatelessWidget {
           child: Text(
             value,
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 22, // Ligeramente más grande
               fontWeight: FontWeight.bold,
               color: color,
             ),

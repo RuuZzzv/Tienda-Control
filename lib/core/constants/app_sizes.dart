@@ -104,19 +104,19 @@ class AppSizes {
   // Getters para Duration (lazy loading)
   static Duration? _animationFast;
   static Duration get animationFast {
-    _animationFast ??= Duration(milliseconds: animationFastMs);
+    _animationFast ??= const Duration(milliseconds: animationFastMs);
     return _animationFast!;
   }
   
   static Duration? _animationMedium;
   static Duration get animationMedium {
-    _animationMedium ??= Duration(milliseconds: animationMediumMs);
+    _animationMedium ??= const Duration(milliseconds: animationMediumMs);
     return _animationMedium!;
   }
   
   static Duration? _animationSlow;
   static Duration get animationSlow {
-    _animationSlow ??= Duration(milliseconds: animationSlowMs);
+    _animationSlow ??= const Duration(milliseconds: animationSlowMs);
     return _animationSlow!;
   }
   

@@ -182,11 +182,11 @@ class ProductDetailsSheet extends StatelessWidget {
               currencyFormat.format(product.precioVenta),
               valueColor: AppColors.success,
             ),
-            if (product.precioCompra > 0)
+            if (product.precioCosto != null && product.precioCosto! > 0)
               _buildInfoRow(
                 Icons.shopping_cart,
                 languageProvider.translate('purchase_price'),
-                currencyFormat.format(product.precioCompra),
+                currencyFormat.format(product.precioCosto!),
               ),
             if (product.descripcion != null && product.descripcion!.isNotEmpty)
               Padding(

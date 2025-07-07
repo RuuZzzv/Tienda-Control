@@ -1,4 +1,4 @@
-// lib/features/products/models/product.dart
+// lib/features/products/models/product.dart - CORREGIDO SIN STOCK_ACTUAL
 import 'lote.dart';
 
 class Product {
@@ -8,18 +8,18 @@ class Product {
   final int? categoriaId;
   final String? codigoInterno;
   final String? codigoBarras;
-  final double precioCompra;
+  final double? precioCosto;
   final double precioVenta;
-  final int stockMinimo;
-  final String unidadMedida;
+  final int? stockMinimo;
+  final String? unidadMedida;
   final bool activo;
   final DateTime? fechaCreacion;
   final DateTime? fechaActualizacion;
 
-  // Propiedades calculadas
-  String? categoriaNombre;
-  int stockActual;
-  List<Lote> lotes;
+  // Propiedades relacionadas (de joins) - ✅ CALCULADAS, NO ALMACENADAS
+  final String? categoriaNombre;
+  final List<Lote> lotes;
+  final int? _stockActualFromQuery; // ✅ SOLO para cuando viene de query JOIN
 
   Product({
     this.id,
@@ -28,22 +28,19 @@ class Product {
     this.categoriaId,
     this.codigoInterno,
     this.codigoBarras,
-    this.precioCompra = 0,
+    this.precioCosto,
     required this.precioVenta,
-    this.stockMinimo = 0,
-    this.unidadMedida = 'unidad',
+    this.stockMinimo,
+    this.unidadMedida,
     this.activo = true,
     this.fechaCreacion,
     this.fechaActualizacion,
     this.categoriaNombre,
-    this.stockActual = 0,
     this.lotes = const [],
-  });
+    int? stockActualFromQuery, // ✅ SOLO para queries
+  }) : _stockActualFromQuery = stockActualFromQuery;
 
-  bool get tieneStockBajo => stockActual <= stockMinimo;
-  
-  String get codigoDisplay => codigoInterno ?? codigoBarras ?? 'SIN-CÓDIGO';
-
+  // ✅ MÉTODO CORREGIDO: toMap SIN stock_actual
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -52,9 +49,10 @@ class Product {
       'categoria_id': categoriaId,
       'codigo_interno': codigoInterno,
       'codigo_barras': codigoBarras,
-      'precio_compra': precioCompra,
+      'precio_costo': precioCosto,
       'precio_venta': precioVenta,
       'stock_minimo': stockMinimo,
+      // ❌ REMOVIDO: 'stock_actual': stockActual,
       'unidad_medida': unidadMedida,
       'activo': activo ? 1 : 0,
       'fecha_creacion': fechaCreacion?.toIso8601String(),
@@ -62,6 +60,7 @@ class Product {
     };
   }
 
+  // ✅ MÉTODO CORREGIDO: fromMap manejando stock_actual de queries
   factory Product.fromMap(Map<String, dynamic> map) {
     return Product(
       id: map['id'],
@@ -70,10 +69,12 @@ class Product {
       categoriaId: map['categoria_id'],
       codigoInterno: map['codigo_interno'],
       codigoBarras: map['codigo_barras'],
-      precioCompra: (map['precio_compra'] ?? 0).toDouble(),
+      precioCosto: map['precio_costo'] != null 
+          ? (map['precio_costo'] as num).toDouble() 
+          : null,
       precioVenta: (map['precio_venta'] ?? 0).toDouble(),
-      stockMinimo: map['stock_minimo'] ?? 0,
-      unidadMedida: map['unidad_medida'] ?? 'unidad',
+      stockMinimo: map['stock_minimo'],
+      unidadMedida: map['unidad_medida'],
       activo: map['activo'] == 1,
       fechaCreacion: map['fecha_creacion'] != null 
           ? DateTime.parse(map['fecha_creacion']) 
@@ -82,10 +83,29 @@ class Product {
           ? DateTime.parse(map['fecha_actualizacion']) 
           : null,
       categoriaNombre: map['categoria_nombre'],
-      stockActual: map['stock_actual'] ?? 0,
+      // ✅ SOLO cuando viene de query JOIN
+      stockActualFromQuery: map['stock_actual'] != null 
+          ? (map['stock_actual'] as num).toInt() 
+          : null,
     );
   }
 
+  // ✅ GETTER: Stock actual calculado
+  int get stockActual {
+    // Si viene de query JOIN, usar ese valor
+    if (_stockActualFromQuery != null) {
+      return _stockActualFromQuery!;
+    }
+    
+    // Si no, calcular desde los lotes
+    if (lotes.isEmpty) return 0;
+    
+    return lotes
+        .where((lote) => lote.activo)
+        .fold(0, (sum, lote) => sum + lote.cantidadActual);
+  }
+
+  // ✅ MÉTODO CORREGIDO: copyWith SIN stock_actual
   Product copyWith({
     int? id,
     String? nombre,
@@ -93,7 +113,7 @@ class Product {
     int? categoriaId,
     String? codigoInterno,
     String? codigoBarras,
-    double? precioCompra,
+    double? precioCosto,
     double? precioVenta,
     int? stockMinimo,
     String? unidadMedida,
@@ -101,8 +121,8 @@ class Product {
     DateTime? fechaCreacion,
     DateTime? fechaActualizacion,
     String? categoriaNombre,
-    int? stockActual,
     List<Lote>? lotes,
+    int? stockActualFromQuery,
   }) {
     return Product(
       id: id ?? this.id,
@@ -111,7 +131,7 @@ class Product {
       categoriaId: categoriaId ?? this.categoriaId,
       codigoInterno: codigoInterno ?? this.codigoInterno,
       codigoBarras: codigoBarras ?? this.codigoBarras,
-      precioCompra: precioCompra ?? this.precioCompra,
+      precioCosto: precioCosto ?? this.precioCosto,
       precioVenta: precioVenta ?? this.precioVenta,
       stockMinimo: stockMinimo ?? this.stockMinimo,
       unidadMedida: unidadMedida ?? this.unidadMedida,
@@ -119,8 +139,8 @@ class Product {
       fechaCreacion: fechaCreacion ?? this.fechaCreacion,
       fechaActualizacion: fechaActualizacion ?? this.fechaActualizacion,
       categoriaNombre: categoriaNombre ?? this.categoriaNombre,
-      stockActual: stockActual ?? this.stockActual,
       lotes: lotes ?? this.lotes,
+      stockActualFromQuery: stockActualFromQuery ?? this._stockActualFromQuery,
     );
   }
 
@@ -128,4 +148,14 @@ class Product {
   String toString() {
     return 'Product{id: $id, nombre: $nombre, precioVenta: $precioVenta, stockActual: $stockActual}';
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Product &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

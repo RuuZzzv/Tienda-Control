@@ -1,3 +1,4 @@
+// lib/features/dashboard/screens/dashboard_screen.dart - CON SELECTOR DE MONEDA
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -10,7 +11,9 @@ import '../widgets/recent_sales.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
 import '../../../core/providers/language_provider.dart';
+import '../../../core/providers/currency_provider.dart'; // ✅ NUEVO IMPORT
 import '../../../core/widgets/language_selector.dart';
+import '../../../core/widgets/currency_selector.dart'; // ✅ NUEVO IMPORT
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -38,7 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       selector: (_, provider) => provider.currentLanguage,
       builder: (context, currentLanguage, child) {
         final languageProvider = context.read<LanguageProvider>();
-        
+
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
@@ -63,9 +66,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _showNotifications(BuildContext context, LanguageProvider languageProvider) {
+  void _showNotifications(
+      BuildContext context, LanguageProvider languageProvider) {
     final provider = context.read<DashboardProvider>();
-    
+
     showModalBottomSheet(
       context: context,
       builder: (context) => _NotificationsSheet(
@@ -86,7 +90,8 @@ class _DashboardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Selector<DashboardProvider, ({bool isLoading, String? error, DashboardStats? stats})>(
+    return Selector<DashboardProvider,
+        ({bool isLoading, String? error, DashboardStats? stats})>(
       selector: (_, provider) => (
         isLoading: provider.isLoading,
         error: provider.error,
@@ -113,29 +118,38 @@ class _DashboardBody extends StatelessWidget {
           onRefresh: context.read<DashboardProvider>().refresh,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(AppSizes.paddingM),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _GreetingCard(languageProvider: languageProvider),
-                const SizedBox(height: AppSizes.sectionSpacing),
+            child: SafeArea(
+              bottom:
+                  false, // No safe area en bottom para que el navbar se vea bien
+              child: Padding(
+                padding: const EdgeInsets.all(AppSizes.paddingM),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _GreetingCard(languageProvider: languageProvider),
+                    const SizedBox(height: AppSizes.sectionSpacing),
 
-                const LanguageSelector(),
-                const SizedBox(height: AppSizes.sectionSpacing),
+                    // ✅ SELECTORES DE CONFIGURACIÓN
+                    _ConfigurationSection(),
+                    const SizedBox(height: AppSizes.sectionSpacing),
 
-                _StatsSection(stats: stats, languageProvider: languageProvider),
-                const SizedBox(height: AppSizes.sectionSpacing),
+                    _StatsSection(
+                        stats: stats, languageProvider: languageProvider),
+                    const SizedBox(height: AppSizes.sectionSpacing),
 
-                QuickActionsWidget(languageProvider: languageProvider),
-                const SizedBox(height: AppSizes.sectionSpacing),
+                    QuickActionsWidget(languageProvider: languageProvider),
+                    const SizedBox(height: AppSizes.sectionSpacing),
 
-                RecentSalesWidget(
-                  ventasRecientes: stats.ventasRecientes,
-                  languageProvider: languageProvider,
+                    RecentSalesWidget(
+                      ventasRecientes: stats.ventasRecientes,
+                      languageProvider: languageProvider,
+                    ),
+
+                    // Espacio extra para el bottom navigation bar
+                    const SizedBox(height: 100),
+                  ],
                 ),
-                
-                const SizedBox(height: AppSizes.paddingXL),
-              ],
+              ),
             ),
           ),
         );
@@ -144,7 +158,74 @@ class _DashboardBody extends StatelessWidget {
   }
 }
 
-// Widget de carga optimizado
+class _ConfigurationSection extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Configuración',
+          style: TextStyle(
+            fontSize: AppSizes.textL,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: AppSizes.paddingS),
+
+        // ✅ LAYOUT RESPONSIVO BASADO EN EL ANCHO DE PANTALLA
+        screenWidth > 400
+            ? _buildRowLayout() // Dispositivos grandes: selectores lado a lado
+            : _buildColumnLayout(), // Dispositivos pequeños: selectores apilados
+      ],
+    );
+  }
+
+  // ✅ LAYOUT EN FILA PARA PANTALLAS GRANDES
+  Widget _buildRowLayout() {
+    return IntrinsicHeight(
+      // ✅ ASEGURAR MISMA ALTURA
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Selector de idioma
+          const Expanded(
+            flex: 1,
+            child: LanguageSelector(),
+          ),
+          const SizedBox(width: 8), // ✅ REDUCIDO ESPACIO ENTRE CARDS
+          // Selector de moneda
+          const Expanded(
+            flex: 1,
+            child: CurrencySelector(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildColumnLayout() {
+    return Column(
+      children: [
+        // Selector de idioma
+        const SizedBox(
+          width: double.infinity,
+          child: LanguageSelector(),
+        ),
+        const SizedBox(height: 8),
+        // Selector de moneda
+        const SizedBox(
+          width: double.infinity,
+          child: CurrencySelector(),
+        ),
+      ],
+    );
+  }
+}
+
 class _LoadingWidget extends StatelessWidget {
   final LanguageProvider languageProvider;
 
@@ -309,33 +390,37 @@ class _GreetingCard extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(AppSizes.paddingL),
+        padding: const EdgeInsets.all(AppSizes.paddingM),
         child: Row(
           children: [
             Icon(
               _getGreetingIcon(hour),
-              size: AppSizes.iconXL,
+              size: AppSizes.iconL,
               color: AppColors.primary,
             ),
-            const SizedBox(width: AppSizes.paddingM),
+            const SizedBox(width: AppSizes.paddingS),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     languageProvider.translate(greetingKey),
                     style: const TextStyle(
-                      fontSize: AppSizes.textXL,
+                      fontSize: AppSizes.textL,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
                     style: const TextStyle(
                       fontSize: AppSizes.textM,
                       color: AppColors.textSecondary,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -353,7 +438,6 @@ class _GreetingCard extends StatelessWidget {
   }
 }
 
-// Sección de estadísticas como widget separado
 class _StatsSection extends StatelessWidget {
   final DashboardStats stats;
   final LanguageProvider languageProvider;
@@ -371,65 +455,112 @@ class _StatsSection extends StatelessWidget {
         Text(
           languageProvider.translate('today_summary'),
           style: const TextStyle(
-            fontSize: AppSizes.textXL,
+            fontSize: AppSizes.textL,
             fontWeight: FontWeight.bold,
             color: AppColors.textPrimary,
           ),
         ),
-        const SizedBox(height: AppSizes.paddingM),
-        Row(
-          children: [
-            Expanded(
-              child: StatsCard(
-                title: languageProvider.translate('sales_today'),
-                value: NumberFormat.currency(
-                  locale: 'es_CO',
-                  symbol: '\$',
-                ).format(stats.ventasHoy),
-                icon: Icons.point_of_sale,
-                color: AppColors.success,
-                subtitle: '${stats.cantidadVentasHoy} ${languageProvider.translate('sales')}',
-                onTap: () => context.go('/pos'),
-              ),
-            ),
-            const SizedBox(width: AppSizes.paddingM),
-            Expanded(
-              child: StatsCard(
-                title: languageProvider.translate('products'),
-                value: stats.totalProductos.toString(),
-                icon: Icons.inventory_2,
-                color: AppColors.info,
-                subtitle: languageProvider.translate('active_products'),
-                onTap: () => context.go('/products'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSizes.paddingM),
-        Row(
-          children: [
-            Expanded(
-              child: StatsCard(
-                title: languageProvider.translate('low_stock'),
-                value: stats.productosStockBajo.toString(),
-                icon: Icons.warning,
-                color: AppColors.warning,
-                subtitle: languageProvider.translate('require_attention'),
-                onTap: () => context.go('/inventory'),
-              ),
-            ),
-            const SizedBox(width: AppSizes.paddingM),
-            Expanded(
-              child: StatsCard(
-                title: languageProvider.translate('reports'),
-                value: 'Ver',
-                icon: Icons.analytics,
-                color: AppColors.accent,
-                subtitle: languageProvider.translate('detailed_analysis'),
-                onTap: () => context.go('/reports'),
-              ),
-            ),
-          ],
+        const SizedBox(height: AppSizes.paddingS),
+
+        // ✅ USAR CONSUMER PARA CURRENCY PROVIDER
+        Consumer<CurrencyProvider>(
+          builder: (context, currencyProvider, child) {
+            return Column(
+              children: [
+                // Primera fila de stats
+                IntrinsicHeight(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: StatsCard(
+                          title: languageProvider.translate('sales_today'),
+                          // ✅ FORMATEAR PRECIO CON LA MONEDA SELECCIONADA
+                          value: currencyProvider.formatPrice(stats.ventasHoy),
+                          icon: Icons.point_of_sale,
+                          color: AppColors.success,
+                          subtitle:
+                              '${stats.cantidadVentasHoy} ${languageProvider.translate('sales')}',
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.info, color: Colors.white),
+                                    SizedBox(width: 8),
+                                    Text('Módulo de ventas próximamente'),
+                                  ],
+                                ),
+                                backgroundColor: AppColors.info,
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: AppSizes.paddingS),
+                      Expanded(
+                        child: StatsCard(
+                          title: languageProvider.translate('products'),
+                          value: stats.totalProductos.toString(),
+                          icon: Icons.inventory_2,
+                          color: AppColors.info,
+                          subtitle:
+                              languageProvider.translate('active_products'),
+                          onTap: () => context.go('/products'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSizes.paddingS),
+
+                // Segunda fila de stats
+                IntrinsicHeight(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: StatsCard(
+                          title: languageProvider.translate('low_stock'),
+                          value: stats.productosStockBajo.toString(),
+                          icon: Icons.warning,
+                          color: AppColors.warning,
+                          subtitle:
+                              languageProvider.translate('require_attention'),
+                          onTap: () => context.go('/inventory'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSizes.paddingS),
+                      Expanded(
+                        child: StatsCard(
+                          title: languageProvider.translate('reports'),
+                          value: 'Ver',
+                          icon: Icons.analytics,
+                          color: AppColors.accent,
+                          subtitle:
+                              languageProvider.translate('detailed_analysis'),
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.info, color: Colors.white),
+                                    SizedBox(width: 8),
+                                    Text('Módulo de reportes próximamente'),
+                                  ],
+                                ),
+                                backgroundColor: AppColors.info,
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -449,6 +580,9 @@ class _NotificationsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.8,
+      ),
       padding: const EdgeInsets.all(AppSizes.paddingL),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -470,7 +604,6 @@ class _NotificationsSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSizes.paddingM),
-          
           if (dashboardProvider.tieneAlertas) ...[
             ListTile(
               leading: const Icon(Icons.warning, color: AppColors.warning),
@@ -482,13 +615,11 @@ class _NotificationsSheet extends StatelessWidget {
               },
             ),
           ],
-          
           ListTile(
             leading: const Icon(Icons.check_circle, color: AppColors.success),
             title: Text(languageProvider.translate('system_working')),
             subtitle: Text(languageProvider.translate('store_ready')),
           ),
-          
           const SizedBox(height: AppSizes.paddingL),
           SizedBox(
             width: double.infinity,

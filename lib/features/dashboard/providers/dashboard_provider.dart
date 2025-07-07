@@ -1,3 +1,4 @@
+// lib/features/dashboard/providers/dashboard_provider.dart - CORREGIDO
 import 'package:flutter/material.dart';
 import '../models/dashboard_stats.dart';
 import '../../../core/database/database_helper.dart';
@@ -11,6 +12,7 @@ class DashboardProvider extends ChangeNotifier {
   bool _databaseRepaired = false;
   bool _isInitialized = false;
 
+  // Getters
   DashboardStats? get stats => _stats;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -49,7 +51,7 @@ class DashboardProvider extends ChangeNotifier {
         }
       }
       
-      print('📊 Dashboard cargado: ${_stats!.totalProductos} productos, \$${_stats!.ventasHoy} en ventas');
+      print('📊 Dashboard cargado: ${_stats!.totalProductos} productos, \${_stats!.ventasHoy} en ventas');
       
     } catch (e) {
       print('❌ Error cargando dashboard: $e');
@@ -103,9 +105,10 @@ class DashboardProvider extends ChangeNotifier {
     
     if (cantidad == 0) return 'Sin ventas hoy';
     
-    return '\$${ventas.toStringAsFixed(0)} en $cantidad ${cantidad == 1 ? 'venta' : 'ventas'}';
+    return '\${ventas.toStringAsFixed(0)} en $cantidad ${cantidad == 1 ? 'venta' : 'ventas'}';
   }
 
+  // ✅ CORREGIDO: Error de sintaxis arreglado
   bool get tieneAlertas {
     return _stats?.productosStockBajo != null && _stats!.productosStockBajo > 0;
   }

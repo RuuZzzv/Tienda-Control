@@ -50,65 +50,62 @@ class _CartButton extends StatelessWidget {
   }
 }
 
-// Contenido principal como widget const
+// Contenido principal simplificado sin conflictos de layout
 class _POSContent extends StatelessWidget {
   const _POSContent();
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(AppSizes.paddingL),
-        child: _ComingSoonMessage(),
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Container(
+        width: double.infinity,
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.of(context).size.height - 
+                     MediaQuery.of(context).padding.top - 
+                     kToolbarHeight - 
+                     80, // Espacio para bottom navigation
+        ),
+        padding: const EdgeInsets.all(AppSizes.paddingL),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _POSIcon(),
+            SizedBox(height: AppSizes.paddingL),
+            _POSTitle(),
+            SizedBox(height: AppSizes.paddingM),
+            _POSDescription(),
+            SizedBox(height: AppSizes.paddingL),
+            _ActionButtons(),
+          ],
+        ),
       ),
     );
   }
 }
 
-// Mensaje de "próximamente" reutilizable
-class _ComingSoonMessage extends StatelessWidget {
-  const _ComingSoonMessage();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const _POSIcon(),
-        const SizedBox(height: AppSizes.paddingL),
-        const _POSTitle(),
-        const SizedBox(height: AppSizes.paddingM),
-        const _POSDescription(),
-        const SizedBox(height: AppSizes.paddingXL),
-        _ActionButtons(),
-      ],
-    );
-  }
-}
-
-// Icono principal como widget const
+// Icono principal
 class _POSIcon extends StatelessWidget {
   const _POSIcon();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSizes.paddingXL),
+      padding: const EdgeInsets.all(AppSizes.paddingL * 1.5),
       decoration: BoxDecoration(
         color: AppColors.primary.withOpacity(0.1),
         shape: BoxShape.circle,
       ),
       child: const Icon(
         Icons.point_of_sale,
-        size: AppSizes.iconXXL * 2,
+        size: 80,
         color: AppColors.primary,
       ),
     );
   }
 }
 
-// Título como widget const
+// Título
 class _POSTitle extends StatelessWidget {
   const _POSTitle();
 
@@ -117,7 +114,7 @@ class _POSTitle extends StatelessWidget {
     return const Text(
       'Punto de Venta',
       style: TextStyle(
-        fontSize: AppSizes.textXXL,
+        fontSize: 28,
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
       ),
@@ -125,26 +122,31 @@ class _POSTitle extends StatelessWidget {
   }
 }
 
-// Descripción como widget const
+// Descripción
 class _POSDescription extends StatelessWidget {
   const _POSDescription();
 
   @override
   Widget build(BuildContext context) {
-    return const Text(
-      'Esta función estará disponible próximamente.\nAquí podrás realizar ventas rápidas y gestionar el carrito de compras.',
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        fontSize: AppSizes.textL,
-        color: AppColors.textSecondary,
-        height: 1.5,
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: AppSizes.paddingM),
+      child: Text(
+        'Esta función estará disponible próximamente.\nAquí podrás realizar ventas rápidas y gestionar el carrito de compras.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 16,
+          color: AppColors.textSecondary,
+          height: 1.4,
+        ),
       ),
     );
   }
 }
 
-// Botones de acción para preparar la UI futura
+// Botones de acción simplificados
 class _ActionButtons extends StatelessWidget {
+  const _ActionButtons();
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -164,8 +166,8 @@ class _ActionButtons extends StatelessWidget {
             foregroundColor: Colors.white,
           ),
         ),
-        const SizedBox(height: AppSizes.paddingM),
-        // Features preview
+        const SizedBox(height: AppSizes.paddingL),
+        // Features preview usando Column en lugar de GridView
         const _FeaturesPreview(),
       ],
     );
@@ -174,9 +176,10 @@ class _ActionButtons extends StatelessWidget {
   static void _showFeatureInfo(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSizes.cardRadius * 2),
+          top: Radius.circular(20),
         ),
       ),
       builder: (context) => const _FeatureInfoSheet(),
@@ -184,7 +187,7 @@ class _ActionButtons extends StatelessWidget {
   }
 }
 
-// Preview de características futuras
+// Preview de características usando Column simple
 class _FeaturesPreview extends StatelessWidget {
   const _FeaturesPreview();
 
@@ -213,13 +216,26 @@ class _FeaturesPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSizes.paddingM,
-      runSpacing: AppSizes.paddingM,
-      alignment: WrapAlignment.center,
-      children: _features.map((feature) => 
-        _FeatureChip(feature: feature)
-      ).toList(),
+    return Column(
+      children: [
+        // Primera fila
+        Row(
+          children: [
+            Expanded(child: _FeatureChip(feature: _features[0])),
+            const SizedBox(width: AppSizes.paddingS),
+            Expanded(child: _FeatureChip(feature: _features[1])),
+          ],
+        ),
+        const SizedBox(height: AppSizes.paddingS),
+        // Segunda fila
+        Row(
+          children: [
+            Expanded(child: _FeatureChip(feature: _features[2])),
+            const SizedBox(width: AppSizes.paddingS),
+            Expanded(child: _FeatureChip(feature: _features[3])),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -247,32 +263,35 @@ class _FeatureChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSizes.paddingM,
+        horizontal: AppSizes.paddingS,
         vertical: AppSizes.paddingS,
       ),
       decoration: BoxDecoration(
         color: feature.color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(AppSizes.containerRadius),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: feature.color.withOpacity(0.3),
         ),
       ),
-      child: Row(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             feature.icon,
-            size: AppSizes.iconS,
+            size: 24,
             color: feature.color,
           ),
-          const SizedBox(width: AppSizes.paddingXS),
+          const SizedBox(height: AppSizes.paddingXS),
           Text(
             feature.title,
             style: TextStyle(
-              fontSize: AppSizes.textS,
+              fontSize: 12,
               color: feature.color,
               fontWeight: FontWeight.w600,
             ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -287,42 +306,60 @@ class _FeatureInfoSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSizes.paddingL),
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(20),
+        ),
+      ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           // Handle bar
           Container(
             width: 50,
             height: 5,
+            margin: const EdgeInsets.only(top: AppSizes.paddingM),
             decoration: BoxDecoration(
               color: AppColors.textTertiary,
               borderRadius: BorderRadius.circular(2.5),
             ),
           ),
-          const SizedBox(height: AppSizes.paddingL),
           // Título
-          const Text(
-            'Próximamente en POS',
-            style: TextStyle(
-              fontSize: AppSizes.textXL,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+          const Padding(
+            padding: EdgeInsets.all(AppSizes.paddingL),
+            child: Text(
+              'Próximamente en POS',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
-          const SizedBox(height: AppSizes.paddingM),
-          // Lista de características
-          const _FeaturesList(),
-          const SizedBox(height: AppSizes.paddingL),
+          // Contenido scrolleable
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: AppSizes.paddingL),
+              child: const _FeaturesList(),
+            ),
+          ),
           // Botón cerrar
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingM),
+          Padding(
+            padding: const EdgeInsets.all(AppSizes.paddingL),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingM),
+                  backgroundColor: AppColors.primary,
+                ),
+                child: const Text(
+                  'Entendido',
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
-              child: const Text('Entendido'),
             ),
           ),
         ],
@@ -350,14 +387,13 @@ class _FeaturesList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
       children: _featureDescriptions.map((description) => 
         Padding(
           padding: const EdgeInsets.only(bottom: AppSizes.paddingS),
           child: Text(
             description,
             style: const TextStyle(
-              fontSize: AppSizes.textM,
+              fontSize: 16,
               color: AppColors.textSecondary,
               height: 1.4,
             ),

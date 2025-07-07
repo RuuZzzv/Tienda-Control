@@ -33,11 +33,13 @@ class LanguageProvider extends ChangeNotifier {
   // Inicialización asíncrona
   Future<void> _initialize() async {
     await loadSavedLanguage();
+    // Precargar todas las traducciones
+    AppLanguages.preloadAllLanguages();
     _isInitialized = true;
     notifyListeners();
   }
   
-  // Cargar idioma guardado con optimización
+  // Cargar idioma guardado
   Future<void> loadSavedLanguage() async {
     try {
       _prefs ??= await SharedPreferences.getInstance();
@@ -45,28 +47,20 @@ class LanguageProvider extends ChangeNotifier {
       
       if (savedLanguage != null && AppLanguages.isSupported(savedLanguage)) {
         _currentLanguage = savedLanguage;
-        // Precargar el idioma para mejor rendimiento
-        AppLanguages.preloadLanguage(savedLanguage);
-      } else {
-        // Precargar idioma por defecto
-        AppLanguages.preloadLanguage(_currentLanguage);
       }
     } catch (e) {
       debugPrint('Error cargando idioma guardado: $e');
-      // Precargar idioma por defecto en caso de error
-      AppLanguages.preloadLanguage(_currentLanguage);
     }
   }
   
-  // Cambiar idioma con validación mejorada
+  // Cambiar idioma
   Future<bool> changeLanguage(String languageCode) async {
-    // Validar que el idioma sea soportado y diferente al actual
     if (!AppLanguages.isSupported(languageCode) || _currentLanguage == languageCode) {
       return false;
     }
     
     try {
-      // Precargar el nuevo idioma antes de cambiar
+      // Precargar el nuevo idioma
       AppLanguages.preloadLanguage(languageCode);
       
       // Actualizar estado
@@ -85,12 +79,12 @@ class LanguageProvider extends ChangeNotifier {
     }
   }
   
-  // Obtener traducción optimizada
+  // Obtener traducción
   String translate(String key) {
     return AppLanguages.translate(_currentLanguage, key);
   }
   
-  // Método helper para traducciones con parámetros
+  // Método para traducciones con parámetros
   String translateWithParams(String key, Map<String, dynamic> params) {
     String translation = translate(key);
     
@@ -102,7 +96,7 @@ class LanguageProvider extends ChangeNotifier {
     return translation;
   }
   
-  // Obtener lista de idiomas disponibles con estado
+  // Obtener lista de idiomas disponibles
   List<LanguageOption> get availableLanguages {
     return AppLanguages.supportedLanguages.map((code) {
       final info = AppLanguages.getLanguageInfo(code);
@@ -120,47 +114,53 @@ class LanguageProvider extends ChangeNotifier {
     return _currentLanguage == languageCode;
   }
   
-  // Obtener dirección del texto (útil para idiomas RTL en el futuro)
-  TextDirection get textDirection {
-    // Por ahora todos los idiomas son LTR
-    // Pero esto permite fácil expansión para árabe, hebreo, etc.
-    switch (_currentLanguage) {
-      // case 'ar': // Árabe
-      // case 'he': // Hebreo
-      //   return TextDirection.rtl;
-      default:
-        return TextDirection.ltr;
+  // Obtener dirección del texto
+  TextDirection get textDirection => TextDirection.ltr;
+  
+  // Métodos de utilidad
+  String get appName => translate('app_name');
+  String get welcomeMessage => translate('welcome');
+  String getCurrentGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return translate('good_morning');
+    } else if (hour < 18) {
+      return translate('good_afternoon');
+    } else {
+      return translate('good_evening');
     }
   }
   
-  // Precargar todos los idiomas (útil para configuración)
-  Future<void> preloadAllLanguages() async {
-    AppLanguages.preloadAllLanguages();
+  // Formatear fecha según el idioma
+  String formatDate(DateTime date) {
+    // Implementar formateo de fecha según el idioma seleccionado
+    switch (_currentLanguage) {
+      case 'es':
+        return '${date.day}/${date.month}/${date.year}';
+      case 'en':
+        return '${date.month}/${date.day}/${date.year}';
+      case 'it':
+        return '${date.day}/${date.month}/${date.year}';
+      default:
+        return '${date.day}/${date.month}/${date.year}';
+    }
   }
   
-  // Limpiar cache de traducciones (útil para liberar memoria)
-  void clearTranslationsCache() {
-    AppLanguages.clearCache();
-    // Recargar el idioma actual
-    AppLanguages.preloadLanguage(_currentLanguage);
-  }
-  
-  // Verificar traducciones faltantes (útil en desarrollo)
-  Map<String, List<String>> checkMissingTranslations() {
-    return AppLanguages.checkMissingTranslations();
-  }
-  
-  // Obtener todas las keys de traducción (útil para testing)
-  Set<String> getAllTranslationKeys() {
-    return AppLanguages.getAllTranslationKeys();
-  }
-  
-  @override
-  void dispose() {
-    // No es necesario limpiar el cache aquí ya que es estático
-    // pero podría ser útil en algunos casos
-    // AppLanguages.clearCache();
-    super.dispose();
+  // Formatear hora según el idioma
+  String formatTime(DateTime time) {
+    final hour = time.hour;
+    final minute = time.minute;
+    
+    switch (_currentLanguage) {
+      case 'en':
+        // Formato 12 horas para inglés
+        final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+        final period = hour < 12 ? 'AM' : 'PM';
+        return '${hour12.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
+      default:
+        // Formato 24 horas para español e italiano
+        return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+    }
   }
 }
 
@@ -178,7 +178,6 @@ class LanguageOption {
     required this.isSelected,
   });
   
-  // Método helper para crear una copia con nuevo estado de selección
   LanguageOption copyWith({bool? isSelected}) {
     return LanguageOption(
       code: code,

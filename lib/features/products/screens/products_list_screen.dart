@@ -1,4 +1,4 @@
-// lib/features/products/screens/products_list_screen.dart - REDISEÑADO
+// lib/features/products/screens/products_list_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -6,14 +6,10 @@ import '../providers/products_provider.dart';
 import '../models/product.dart';
 import '../models/product_extensions.dart';
 import '../widgets/product_card.dart';
-import '../widgets/product_filters.dart';
-import '../widgets/products_empty_state.dart';
-import '../widgets/product_details_sheet.dart';
+import '../widgets/product_detail_modal.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_sizes.dart';
 import '../../../core/providers/language_provider.dart';
-import '../../../core/widgets/loading_widget.dart';
-import '../../../core/widgets/error_widget.dart';
+import '../../../core/extensions/build_context_extensions.dart';
 
 class ProductsListScreen extends StatefulWidget {
   const ProductsListScreen({super.key});
@@ -25,302 +21,451 @@ class ProductsListScreen extends StatefulWidget {
 class _ProductsListScreenState extends State<ProductsListScreen> {
   final TextEditingController _searchController = TextEditingController();
   
-  // Estados de filtros
-  int? _selectedCategoriaId;
-  bool _showLowStockOnly = false;
-  bool _showOutOfStock = false;
+  // Estados de filtros simplificados
+  String _currentFilter = 'todos';
   String _sortBy = 'name';
   
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = context.read<ProductsProvider>();
-      provider.loadCategorias();
-      provider.loadProducts();
+      _initializeData();
     });
+  }
+
+  void _initializeData() async {
+    try {
+      final provider = context.read<ProductsProvider>();
+      await provider.initializeIfNeeded();
+    } catch (e) {
+      print('Error initializing data: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<LanguageProvider>(
-      builder: (context, languageProvider, child) {
-        return Scaffold(
-          backgroundColor: AppColors.background,
-          appBar: _buildAppBar(languageProvider),
-          body: Consumer<ProductsProvider>(
-            builder: (context, provider, child) {
-              if (provider.isLoading && provider.products.isEmpty) {
-                return const LoadingWidget(
-                  message: 'Cargando productos...',
-                );
-              }
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: _buildAppBar(),
+      body: Consumer<ProductsProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading && provider.products.isEmpty) {
+            return _buildLoadingState();
+          }
 
-              if (provider.error != null && provider.products.isEmpty) {
-                return CustomErrorWidget(
-                  error: provider.error!,
-                  onRetry: () => provider.refresh(),
-                );
-              }
+          if (provider.error != null && provider.products.isEmpty) {
+            return _buildErrorState(provider);
+          }
 
-              final products = _getFilteredAndSortedProducts(provider);
+          final products = _getFilteredAndSortedProducts(provider);
 
-              return SafeArea(
-                child: Column(
-                  children: [
-                    // Barra de búsqueda y filtros
-                    Container(
-                      color: Colors.white,
-                      child: Column(
-                        children: [
-                          // Búsqueda
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSizes.paddingL,
-                              vertical: AppSizes.paddingM,
-                            ),
-                            child: TextField(
-                              controller: _searchController,
-                              decoration: InputDecoration(
-                                hintText: 'Buscar productos...',
-                                hintStyle: TextStyle(
-                                  fontSize: AppSizes.textL,
-                                  color: AppColors.textTertiary,
-                                ),
-                                prefixIcon: Icon(
-                                  Icons.search,
-                                  size: AppSizes.iconL,
-                                  color: AppColors.textSecondary,
-                                ),
-                                suffixIcon: _searchController.text.isNotEmpty
-                                    ? IconButton(
-                                        icon: Icon(
-                                          Icons.clear,
-                                          size: AppSizes.iconM,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                        onPressed: () {
-                                          _searchController.clear();
-                                          setState(() {});
-                                        },
-                                      )
-                                    : null,
-                                filled: true,
-                                fillColor: AppColors.background,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: AppSizes.paddingL,
-                                  vertical: AppSizes.paddingL,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                  borderSide: BorderSide.none,
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                  borderSide: BorderSide.none,
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                  borderSide: BorderSide(
-                                    color: AppColors.primary,
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                              style: const TextStyle(fontSize: AppSizes.textL),
-                              onChanged: (value) => setState(() {}),
-                            ),
-                          ),
-                          
-                          // Botón de filtros
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              left: AppSizes.paddingL,
-                              right: AppSizes.paddingL,
-                              bottom: AppSizes.paddingM,
-                            ),
-                            child: OutlinedButton(
-                              onPressed: () => _showFilterDialog(context, languageProvider),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSizes.paddingL,
-                                  vertical: AppSizes.paddingM,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(25),
-                                ),
-                                side: BorderSide(
-                                  color: _hasActiveFilters() 
-                                      ? AppColors.primary 
-                                      : AppColors.divider,
-                                  width: 2,
-                                ),
-                                backgroundColor: _hasActiveFilters()
-                                    ? AppColors.primary.withOpacity(0.05)
-                                    : Colors.transparent,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.filter_list,
-                                    size: AppSizes.iconM,
-                                    color: _hasActiveFilters()
-                                        ? AppColors.primary
-                                        : AppColors.textSecondary,
-                                  ),
-                                  const SizedBox(width: AppSizes.paddingS),
-                                  Text(
-                                    'Filtros',
-                                    style: TextStyle(
-                                      fontSize: AppSizes.textL,
-                                      color: _hasActiveFilters()
-                                          ? AppColors.primary
-                                          : AppColors.textPrimary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  if (_hasActiveFilters()) ...[
-                                    const SizedBox(width: AppSizes.paddingS),
-                                    Container(
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Text(
-                                        _getActiveFiltersCount().toString(),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: AppSizes.textS,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    const Divider(height: 1),
-
-                    // Lista de productos o estado vacío
-                    Expanded(
-                      child: products.isEmpty
-                          ? ProductsEmptyState(
-                              hasFilters: _hasActiveFilters(),
-                              onClearFilters: _clearAllFilters,
-                              onAddProduct: () => context.push('/add-product'),
-                            )
-                          : RefreshIndicator(
-                              onRefresh: provider.refresh,
-                              child: ListView.builder(
-                                padding: const EdgeInsets.only(
-                                  left: AppSizes.paddingL,
-                                  right: AppSizes.paddingL,
-                                  top: AppSizes.paddingM,
-                                  bottom: 100, // Espacio para el FAB
-                                ),
-                                itemCount: products.length,
-                                itemBuilder: (context, index) {
-                                  final product = products[index];
-                                  
-                                  return ProductCard(
-                                    product: product,
-                                    onTap: () => _showProductDetails(product, languageProvider),
-                                    onEdit: () => context.push('/edit-product', extra: product),
-                                    onAddStock: () => context.push('/add-lote', extra: product),
-                                  );
-                                },
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          floatingActionButton: _buildFAB(languageProvider),
-          floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-        );
-      },
+          return _buildMainContent(provider, products);
+        },
+      ),
     );
   }
 
-  AppBar _buildAppBar(LanguageProvider languageProvider) {
+  PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      title: const Text(
-        'Productos',
-        style: TextStyle(
-          fontSize: AppSizes.textXL,
+      title: Text(
+        context.tr('my_products'),
+        style: const TextStyle(
+          fontSize: 20,
           fontWeight: FontWeight.bold,
         ),
       ),
       centerTitle: true,
+      elevation: 0,
+      backgroundColor: AppColors.primary,
+      foregroundColor: Colors.white,
       actions: [
-        Consumer<ProductsProvider>(
-          builder: (context, provider, child) {
-            final lowStockCount = provider.products.where((p) => p.tieneStockBajo).length;
-            
-            if (lowStockCount == 0) {
-              return const SizedBox.shrink();
-            }
-            
-            return Padding(
-              padding: const EdgeInsets.only(right: AppSizes.paddingM),
-              child: Badge(
-                label: Text(
-                  lowStockCount.toString(),
-                  style: const TextStyle(fontSize: AppSizes.textS),
-                ),
-                backgroundColor: AppColors.warning,
-                child: IconButton(
-                  icon: Icon(
-                    Icons.warning_amber_rounded,
-                    size: AppSizes.iconL,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _showLowStockOnly = !_showLowStockOnly;
-                    });
-                  },
-                  tooltip: 'Productos con stock bajo',
-                ),
-              ),
-            );
-          },
-        ),
         IconButton(
-          icon: Icon(Icons.refresh, size: AppSizes.iconL),
-          onPressed: () => context.read<ProductsProvider>().refresh(),
-          tooltip: 'Actualizar',
+          icon: const Icon(Icons.refresh, size: 24),
+          onPressed: () {
+            context.read<ProductsProvider>().refresh();
+          },
+          tooltip: context.tr('refresh'),
         ),
       ],
     );
   }
 
-  Widget _buildFAB(LanguageProvider languageProvider) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSizes.paddingM),
-      child: FloatingActionButton.extended(
-        onPressed: () => context.push('/add-product'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.textOnPrimary,
-        icon: Icon(Icons.add, size: AppSizes.iconL),
-        label: const Text(
-          'Agregar Producto',
-          style: TextStyle(
-            fontSize: AppSizes.textL,
-            fontWeight: FontWeight.bold,
-          ),
+  Widget _buildMainContent(ProductsProvider provider, List<Product> products) {
+    return Column(
+      children: [
+        // Header compacto
+        _buildCompactHeader(provider),
+        
+        // Contenido principal
+        Expanded(
+          child: products.isEmpty
+              ? _buildEmptyState()
+              : _buildProductsList(products, provider),
         ),
-        elevation: 8,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(30),
+      ],
+    );
+  }
+
+  Widget _buildCompactHeader(ProductsProvider provider) {
+    return Container(
+      color: Colors.white,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Barra de búsqueda COMPACTA
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: SizedBox(
+              height: 40,
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: context.tr('search_products'),
+                  hintStyle: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textTertiary,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 20,
+                    color: AppColors.textSecondary,
+                  ),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(
+                            Icons.clear,
+                            size: 18,
+                            color: AppColors.textSecondary,
+                          ),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: AppColors.background,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                      color: AppColors.border,
+                      width: 1,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                style: const TextStyle(fontSize: 14),
+                onChanged: (value) => setState(() {}),
+              ),
+            ),
+          ),
+          
+          // Filtros COMPACTOS
+          Container(
+            height: 50,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _CompactFilterButton(
+                    label: context.tr('all_products'),
+                    count: provider.products.length,
+                    isSelected: _currentFilter == 'todos',
+                    color: AppColors.info,
+                    onTap: () => setState(() => _currentFilter = 'todos'),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _CompactFilterButton(
+                    label: context.tr('low_stock'),
+                    count: provider.getProductsWithLowStock().length,
+                    isSelected: _currentFilter == 'stock_bajo',
+                    color: AppColors.warning,
+                    onTap: () => setState(() => _currentFilter = 'stock_bajo'),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _CompactFilterButton(
+                    label: context.tr('out_of_stock'),
+                    count: provider.getOutOfStockProducts().length,
+                    isSelected: _currentFilter == 'sin_stock',
+                    color: AppColors.error,
+                    onTap: () => setState(() => _currentFilter = 'sin_stock'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Ordenamiento COMPACTO
+          Container(
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.sort,
+                  size: 16,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '${context.tr('sort')}:',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    height: 28,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(6),
+                      color: AppColors.background,
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _sortBy,
+                        isExpanded: true,
+                        isDense: true,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textPrimary,
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'name',
+                            child: Text(context.tr('sort_by_name')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'stock',
+                            child: Text(context.tr('sort_by_stock')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'price',
+                            child: Text(context.tr('sort_by_price')),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _sortBy = value;
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Divider reducido
+          const SizedBox(height: 4),
+          const Divider(height: 1, color: AppColors.border, thickness: 0.5),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductsList(List<Product> products, ProductsProvider provider) {
+    return RefreshIndicator(
+      onRefresh: provider.refresh,
+      child: ListView.builder(
+        padding: EdgeInsets.only(
+          left: 8,
+          right: 8,
+          top: 4,
+          bottom: MediaQuery.of(context).viewPadding.bottom + 140,
+        ),
+        itemCount: products.length,
+        itemBuilder: (context, index) {
+          final product = products[index];
+          
+          return ProductCard(
+            product: product,
+            onTap: () => ProductDetailModal.show(context, product),
+            // Usar context.go() en lugar de context.push()
+            onEdit: () => context.go('/edit-product/${product.id}'),
+            onAddStock: () => context.go('/add-lote', extra: product),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 20,
+        bottom: MediaQuery.of(context).viewPadding.bottom + 140,
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Icono compacto
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _hasActiveFilters() ? Icons.search_off : Icons.inventory_2_outlined,
+              size: 40,
+              color: AppColors.primary.withOpacity(0.6),
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Título
+          Text(
+            _hasActiveFilters() 
+                ? context.tr('no_products_found')
+                : context.tr('no_products_registered'),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          
+          const SizedBox(height: 8),
+          
+          // Mensaje descriptivo
+          Text(
+            _hasActiveFilters()
+                ? context.tr('try_refresh')
+                : context.tr('add_first_product'),
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Botón para limpiar filtros
+          if (_hasActiveFilters())
+            OutlinedButton.icon(
+              onPressed: _clearAllFilters,
+              icon: const Icon(Icons.clear_all, size: 18),
+              label: Text(context.tr('clear_filters')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(
+            color: AppColors.primary,
+            strokeWidth: 3,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            context.tr('loading_data'),
+            style: const TextStyle(
+              fontSize: 16,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(ProductsProvider provider) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: 56,
+              color: AppColors.error,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              context.tr('error_loading_data'),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              provider.error ?? context.tr('unexpected_error'),
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => provider.refresh(),
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(context.tr('retry')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -331,40 +476,32 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
     
     // Aplicar filtro de búsqueda
     if (_searchController.text.isNotEmpty) {
-      final searchLower = _searchController.text.toLowerCase();
-      products = products.where((product) {
-        return product.nombre.toLowerCase().contains(searchLower) ||
-               product.descripcion?.toLowerCase().contains(searchLower) == true ||
-               product.codigoBarras?.contains(_searchController.text) == true ||
-               product.codigoInterno?.contains(_searchController.text) == true;
-      }).toList();
+      products = provider.searchProducts(_searchController.text);
     }
     
-    // Aplicar filtro de categoría
-    if (_selectedCategoriaId != null) {
-      products = products.where((p) => p.categoriaId == _selectedCategoriaId).toList();
-    }
-    
-    // Aplicar filtro de stock bajo
-    if (_showLowStockOnly) {
-      products = products.where((p) => p.tieneStockBajo).toList();
-    }
-    
-    // Aplicar filtro de sin stock
-    if (_showOutOfStock) {
-      products = products.where((p) => p.stockActual == 0).toList();
+    // Aplicar filtro principal
+    switch (_currentFilter) {
+      case 'stock_bajo':
+        products = products.where((p) => p.tieneStockBajo).toList();
+        break;
+      case 'sin_stock':
+        products = products.where((p) => p.sinStock).toList();
+        break;
+      case 'todos':
+      default:
+        break;
     }
     
     // Ordenar productos
     products.sort((a, b) {
       switch (_sortBy) {
         case 'stock':
-          return a.stockActual.compareTo(b.stockActual);
+          return a.stockActualSafe.compareTo(b.stockActualSafe);
         case 'price':
           return a.precioVenta.compareTo(b.precioVenta);
         case 'name':
         default:
-          return a.nombre.compareTo(b.nombre);
+          return a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase());
       }
     });
     
@@ -373,316 +510,87 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
 
   bool _hasActiveFilters() {
     return _searchController.text.isNotEmpty ||
-           _selectedCategoriaId != null ||
-           _showLowStockOnly ||
-           _showOutOfStock ||
+           _currentFilter != 'todos' ||
            _sortBy != 'name';
-  }
-
-  int _getActiveFiltersCount() {
-    int count = 0;
-    if (_selectedCategoriaId != null) count++;
-    if (_showLowStockOnly) count++;
-    if (_showOutOfStock) count++;
-    if (_sortBy != 'name') count++;
-    return count;
   }
 
   void _clearAllFilters() {
     setState(() {
       _searchController.clear();
-      _selectedCategoriaId = null;
-      _showLowStockOnly = false;
-      _showOutOfStock = false;
+      _currentFilter = 'todos';
       _sortBy = 'name';
     });
-  }
-
-  void _showProductDetails(Product product, LanguageProvider languageProvider) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => ProductDetailsSheet(
-        product: product,
-        languageProvider: languageProvider,
-      ),
-    );
-  }
-
-  void _showFilterDialog(BuildContext context, LanguageProvider languageProvider) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(AppSizes.cardRadius * 2),
-          topRight: Radius.circular(AppSizes.cardRadius * 2),
-        ),
-      ),
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.8,
-        decoration: const BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(AppSizes.cardRadius * 2),
-            topRight: Radius.circular(AppSizes.cardRadius * 2),
-          ),
-        ),
-        child: Column(
-          children: [
-            // Barra superior
-            Container(
-              margin: const EdgeInsets.only(top: AppSizes.paddingM),
-              width: 60,
-              height: 6,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            
-            // Título
-            Container(
-              padding: const EdgeInsets.all(AppSizes.paddingL),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.filter_list,
-                    size: AppSizes.iconXL,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: AppSizes.paddingM),
-                  const Expanded(
-                    child: Text(
-                      'Filtros',
-                      style: TextStyle(
-                        fontSize: AppSizes.textXL,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: Icon(
-                      Icons.close,
-                      size: AppSizes.iconL,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            const Divider(),
-            
-            // Contenido de filtros
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSizes.paddingL),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Sección de Estado
-                    _buildFilterSection(
-                      title: 'Estado del Stock',
-                      children: [
-                        CheckboxListTile(
-                          value: _showLowStockOnly,
-                          onChanged: (value) {
-                            setState(() => _showLowStockOnly = value ?? false);
-                            Navigator.pop(context);
-                          },
-                          title: const Text(
-                            'Stock Bajo',
-                            style: TextStyle(fontSize: AppSizes.textL),
-                          ),
-                          subtitle: const Text(
-                            'Mostrar solo productos con poco stock',
-                            style: TextStyle(fontSize: AppSizes.textM),
-                          ),
-                          secondary: Container(
-                            padding: const EdgeInsets.all(AppSizes.paddingS),
-                            decoration: BoxDecoration(
-                              color: AppColors.warning.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(AppSizes.containerRadius),
-                            ),
-                            child: Icon(
-                              Icons.warning,
-                              color: AppColors.warning,
-                              size: AppSizes.iconL,
-                            ),
-                          ),
-                        ),
-                        const Divider(),
-                        CheckboxListTile(
-                          value: _showOutOfStock,
-                          onChanged: (value) {
-                            setState(() => _showOutOfStock = value ?? false);
-                            Navigator.pop(context);
-                          },
-                          title: const Text(
-                            'Sin Stock',
-                            style: TextStyle(fontSize: AppSizes.textL),
-                          ),
-                          subtitle: const Text(
-                            'Mostrar solo productos agotados',
-                            style: TextStyle(fontSize: AppSizes.textM),
-                          ),
-                          secondary: Container(
-                            padding: const EdgeInsets.all(AppSizes.paddingS),
-                            decoration: BoxDecoration(
-                              color: AppColors.error.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(AppSizes.containerRadius),
-                            ),
-                            child: Icon(
-                              Icons.remove_circle,
-                              color: AppColors.error,
-                              size: AppSizes.iconL,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: AppSizes.paddingXL),
-                    
-                    // Sección de Ordenar
-                    _buildFilterSection(
-                      title: 'Ordenar por',
-                      children: [
-                        RadioListTile<String>(
-                          value: 'name',
-                          groupValue: _sortBy,
-                          onChanged: (value) {
-                            setState(() => _sortBy = value!);
-                            Navigator.pop(context);
-                          },
-                          title: const Text(
-                            'Nombre (A-Z)',
-                            style: TextStyle(fontSize: AppSizes.textL),
-                          ),
-                          secondary: Icon(
-                            Icons.sort_by_alpha,
-                            size: AppSizes.iconL,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const Divider(),
-                        RadioListTile<String>(
-                          value: 'stock',
-                          groupValue: _sortBy,
-                          onChanged: (value) {
-                            setState(() => _sortBy = value!);
-                            Navigator.pop(context);
-                          },
-                          title: const Text(
-                            'Cantidad en Stock',
-                            style: TextStyle(fontSize: AppSizes.textL),
-                          ),
-                          secondary: Icon(
-                            Icons.inventory,
-                            size: AppSizes.iconL,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const Divider(),
-                        RadioListTile<String>(
-                          value: 'price',
-                          groupValue: _sortBy,
-                          onChanged: (value) {
-                            setState(() => _sortBy = value!);
-                            Navigator.pop(context);
-                          },
-                          title: const Text(
-                            'Precio',
-                            style: TextStyle(fontSize: AppSizes.textL),
-                          ),
-                          secondary: Icon(
-                            Icons.attach_money,
-                            size: AppSizes.iconL,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            
-            // Botón de limpiar filtros
-            if (_hasActiveFilters())
-              Container(
-                padding: const EdgeInsets.all(AppSizes.paddingL),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, -5),
-                    ),
-                  ],
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      _clearAllFilters();
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.error,
-                      padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingL),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppSizes.buttonRadius),
-                      ),
-                    ),
-                    child: const Text(
-                      'Limpiar Todos los Filtros',
-                      style: TextStyle(
-                        fontSize: AppSizes.textL,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterSection({
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: AppSizes.textL,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: AppSizes.paddingM),
-        Card(
-          margin: EdgeInsets.zero,
-          child: Column(children: children),
-        ),
-      ],
-    );
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+}
+
+// BOTÓN DE FILTRO COMPACTO
+class _CompactFilterButton extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool isSelected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _CompactFilterButton({
+    required this.label,
+    required this.count,
+    required this.isSelected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? color 
+              : color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected 
+                ? color 
+                : color.withOpacity(0.3),
+            width: 1.2,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Número
+            Text(
+              count.toString(),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : color,
+              ),
+            ),
+            
+            // Label compacto
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: isSelected ? Colors.white : color,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

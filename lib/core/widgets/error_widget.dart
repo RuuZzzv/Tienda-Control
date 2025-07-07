@@ -212,9 +212,7 @@ class NetworkErrorWidget extends StatelessWidget {
   }
 }
 
-// lib/core/widgets/error_widget.dart - SECCIÓN CORREGIDA
-
-// Widget especializado para errores de permisos
+// Widget especializado para errores de permisos - ✅ CORREGIDO
 class PermissionErrorWidget extends StatelessWidget {
   final String permission;
   final VoidCallback? onRequestPermission;
@@ -230,14 +228,14 @@ class PermissionErrorWidget extends StatelessWidget {
     final languageProvider = context.watch<LanguageProvider>();
     
     return CustomErrorWidget(
-      // OPCIÓN 1: Usar translateWithParams que ya tienes en tu LanguageProvider
+      // ✅ OPCIÓN CORREGIDA: Usar translateWithParams si está disponible
       error: languageProvider.translateWithParams(
         'permission_required_for', 
         {'permission': permission}
       ),
       
-      // OPCIÓN 2: Construir el mensaje manualmente
-      // error: '${languageProvider.translate('permission_required_for')} $permission',
+      // ✅ OPCIÓN ALTERNATIVA: Construir el mensaje manualmente
+      // error: '${languageProvider.translate('permission_required')} para $permission',
       
       icon: Icons.lock_outline,
       title: languageProvider.translate('permission_required'),
@@ -293,7 +291,7 @@ class InlineErrorWidget extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
+            const Icon(
               Icons.error_outline,
               color: AppColors.error,
               size: AppSizes.iconM,
@@ -338,7 +336,7 @@ class InlineErrorWidget extends StatelessWidget {
                   color: AppColors.error.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.error_outline,
                   color: AppColors.error,
                   size: AppSizes.iconL,
@@ -380,7 +378,7 @@ class InlineErrorWidget extends StatelessWidget {
                 label: Text(languageProvider.translate('try_again')),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.error,
-                  side: BorderSide(color: AppColors.error),
+                  side: const BorderSide(color: AppColors.error),
                 ),
               ),
             ),

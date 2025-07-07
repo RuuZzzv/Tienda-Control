@@ -178,9 +178,9 @@ class AppColors {
   static List<BoxShadow>? _cardShadow;
   static List<BoxShadow> get cardShadow {
     _cardShadow ??= [
-      BoxShadow(
+      const BoxShadow(
         color: shadow,
-        offset: const Offset(0, 2),
+        offset: Offset(0, 2),
         blurRadius: 4,
         spreadRadius: 0,
       ),
@@ -191,9 +191,9 @@ class AppColors {
   static List<BoxShadow>? _elevatedShadow;
   static List<BoxShadow> get elevatedShadow {
     _elevatedShadow ??= [
-      BoxShadow(
+      const BoxShadow(
         color: shadow,
-        offset: const Offset(0, 4),
+        offset: Offset(0, 4),
         blurRadius: 12,
         spreadRadius: 0,
       ),

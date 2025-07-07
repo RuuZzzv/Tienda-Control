@@ -3,44 +3,34 @@ class Lote {
   final int? id;
   final int productoId;
   final String? numeroLote;
-  final String codigoLoteInterno;
+  final String? codigoLoteInterno;
   final DateTime? fechaVencimiento;
-  final DateTime fechaIngreso;
+  final DateTime? fechaIngreso;
   final int cantidadInicial;
   final int cantidadActual;
-  final double? precioCompraLote;
+  final double? precioCosto; // Renombrado de precioCompraLote para consistencia
   final bool activo;
-  final String? notas;
+  final String? observaciones; // Renombrado de notas para consistencia con el resto del código
 
-  // Propiedades relacionadas
-  String? productoNombre;
-  double? precioVenta;
+  // Propiedades relacionadas (de joins)
+  final String? productoNombre;
+  final double? productoReferenciaPrecio; // Renombrado para claridad
 
   Lote({
     this.id,
     required this.productoId,
     this.numeroLote,
-    this.codigoLoteInterno = '',
+    this.codigoLoteInterno,
     this.fechaVencimiento,
     DateTime? fechaIngreso,
     required this.cantidadInicial,
     required this.cantidadActual,
-    this.precioCompraLote,
+    this.precioCosto,
     this.activo = true,
-    this.notas,
+    this.observaciones,
     this.productoNombre,
-    this.precioVenta,
+    this.productoReferenciaPrecio,
   }) : fechaIngreso = fechaIngreso ?? DateTime.now();
-
-  bool get estaVencido => fechaVencimiento != null && 
-      fechaVencimiento!.isBefore(DateTime.now());
-  
-  bool get proximoAVencer => fechaVencimiento != null && 
-      fechaVencimiento!.difference(DateTime.now()).inDays <= 7;
-  
-  int get diasParaVencer => fechaVencimiento?.difference(DateTime.now()).inDays ?? -1;
-  
-  bool get tieneStock => cantidadActual > 0;
 
   Map<String, dynamic> toMap() {
     return {
@@ -49,12 +39,12 @@ class Lote {
       'numero_lote': numeroLote,
       'codigo_lote_interno': codigoLoteInterno,
       'fecha_vencimiento': fechaVencimiento?.toIso8601String(),
-      'fecha_ingreso': fechaIngreso.toIso8601String(),
+      'fecha_ingreso': fechaIngreso?.toIso8601String(),
       'cantidad_inicial': cantidadInicial,
       'cantidad_actual': cantidadActual,
-      'precio_compra_lote': precioCompraLote,
+      'precio_costo': precioCosto,
       'activo': activo ? 1 : 0,
-      'notas': notas,
+      'observaciones': observaciones,
     };
   }
 
@@ -63,7 +53,7 @@ class Lote {
       id: map['id'],
       productoId: map['producto_id'] ?? 0,
       numeroLote: map['numero_lote'],
-      codigoLoteInterno: map['codigo_lote_interno'] ?? '',
+      codigoLoteInterno: map['codigo_lote_interno'],
       fechaVencimiento: map['fecha_vencimiento'] != null 
           ? DateTime.parse(map['fecha_vencimiento']) 
           : null,
@@ -72,13 +62,27 @@ class Lote {
           : DateTime.now(),
       cantidadInicial: map['cantidad_inicial'] ?? 0,
       cantidadActual: map['cantidad_actual'] ?? 0,
-      precioCompraLote: map['precio_compra_lote']?.toDouble(),
+      precioCosto: map['precio_costo'] != null 
+          ? (map['precio_costo'] as num).toDouble() 
+          : null,
       activo: map['activo'] == 1,
-      notas: map['notas'],
+      observaciones: map['observaciones'] ?? map['notas'], // Compatibilidad con campo antiguo
       productoNombre: map['producto_nombre'],
-      precioVenta: map['precio_venta']?.toDouble(),
+      productoReferenciaPrecio: map['precio_venta'] != null 
+          ? (map['precio_venta'] as num).toDouble() 
+          : null,
     );
   }
+
+  // Propiedades calculadas
+  bool get tieneStock => cantidadActual > 0;
+  bool get estaVencido => fechaVencimiento != null && DateTime.now().isAfter(fechaVencimiento!);
+  bool get proximoAVencer => fechaVencimiento != null && 
+      fechaVencimiento!.difference(DateTime.now()).inDays <= 7 && 
+      cantidadActual > 0;
+  int get diasParaVencer => fechaVencimiento != null 
+      ? fechaVencimiento!.difference(DateTime.now()).inDays 
+      : -1; // -1 si no hay fecha de vencimiento
 
   Lote copyWith({
     int? id,
@@ -89,11 +93,11 @@ class Lote {
     DateTime? fechaIngreso,
     int? cantidadInicial,
     int? cantidadActual,
-    double? precioCompraLote,
+    double? precioCosto,
     bool? activo,
-    String? notas,
+    String? observaciones,
     String? productoNombre,
-    double? precioVenta,
+    double? productoReferenciaPrecio,
   }) {
     return Lote(
       id: id ?? this.id,
@@ -104,16 +108,26 @@ class Lote {
       fechaIngreso: fechaIngreso ?? this.fechaIngreso,
       cantidadInicial: cantidadInicial ?? this.cantidadInicial,
       cantidadActual: cantidadActual ?? this.cantidadActual,
-      precioCompraLote: precioCompraLote ?? this.precioCompraLote,
+      precioCosto: precioCosto ?? this.precioCosto,
       activo: activo ?? this.activo,
-      notas: notas ?? this.notas,
+      observaciones: observaciones ?? this.observaciones,
       productoNombre: productoNombre ?? this.productoNombre,
-      precioVenta: precioVenta ?? this.precioVenta,
+      productoReferenciaPrecio: productoReferenciaPrecio ?? this.productoReferenciaPrecio,
     );
   }
 
   @override
   String toString() {
-    return 'Lote{id: $id, productoId: $productoId, cantidadActual: $cantidadActual, codigoLoteInterno: $codigoLoteInterno}';
+    return 'Lote{id: $id, productoId: $productoId, cantidadActual: $cantidadActual, numeroLote: $numeroLote}';
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Lote &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

@@ -1,9 +1,11 @@
-// lib/features/dashboard/models/dashboard_stats.dart
+// lib/features/dashboard/models/dashboard_stats.dart - ACTUALIZADO PARA COINCIDIR
 class DashboardStats {
   final double ventasHoy;
   final int cantidadVentasHoy;
   final int totalProductos;
   final int productosStockBajo;
+  final int lotesVencidos;
+  final int lotesProximosVencer;
   final List<VentaReciente> ventasRecientes;
 
   DashboardStats({
@@ -11,6 +13,8 @@ class DashboardStats {
     required this.cantidadVentasHoy,
     required this.totalProductos,
     required this.productosStockBajo,
+    required this.lotesVencidos,
+    required this.lotesProximosVencer,
     required this.ventasRecientes,
   });
 
@@ -20,6 +24,8 @@ class DashboardStats {
       cantidadVentasHoy: map['cantidadVentasHoy'] ?? 0,
       totalProductos: map['totalProductos'] ?? 0,
       productosStockBajo: map['productosStockBajo'] ?? 0,
+      lotesVencidos: map['lotesVencidos'] ?? 0,
+      lotesProximosVencer: map['lotesProximosVencer'] ?? 0,
       ventasRecientes: (map['ventasRecientes'] as List<dynamic>? ?? [])
           .map((item) => VentaReciente.fromMap(item as Map<String, dynamic>))
           .toList(),
@@ -32,6 +38,8 @@ class DashboardStats {
       cantidadVentasHoy: 0,
       totalProductos: 0,
       productosStockBajo: 0,
+      lotesVencidos: 0,
+      lotesProximosVencer: 0,
       ventasRecientes: [],
     );
   }

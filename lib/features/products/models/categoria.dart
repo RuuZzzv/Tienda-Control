@@ -3,12 +3,14 @@ class Categoria {
   final int? id;
   final String nombre;
   final String? descripcion;
+  final bool activo;
   final DateTime? fechaCreacion;
 
   Categoria({
     this.id,
     required this.nombre,
     this.descripcion,
+    this.activo = true,
     this.fechaCreacion,
   });
 
@@ -17,6 +19,7 @@ class Categoria {
       'id': id,
       'nombre': nombre,
       'descripcion': descripcion,
+      'activo': activo ? 1 : 0,
       'fecha_creacion': fechaCreacion?.toIso8601String(),
     };
   }
@@ -26,23 +29,10 @@ class Categoria {
       id: map['id'],
       nombre: map['nombre'] ?? '',
       descripcion: map['descripcion'],
-      fechaCreacion: map['fecha_creacion'] != null 
-          ? DateTime.parse(map['fecha_creacion']) 
+      activo: map['activo'] == 1,
+      fechaCreacion: map['fecha_creacion'] != null
+          ? DateTime.parse(map['fecha_creacion'])
           : null,
-    );
-  }
-
-  Categoria copyWith({
-    int? id,
-    String? nombre,
-    String? descripcion,
-    DateTime? fechaCreacion,
-  }) {
-    return Categoria(
-      id: id ?? this.id,
-      nombre: nombre ?? this.nombre,
-      descripcion: descripcion ?? this.descripcion,
-      fechaCreacion: fechaCreacion ?? this.fechaCreacion,
     );
   }
 

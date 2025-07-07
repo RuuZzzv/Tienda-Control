@@ -1,177 +1,121 @@
 // lib/features/products/widgets/product_card.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../models/product_extensions.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_sizes.dart';
+import '../../../core/providers/currency_provider.dart';
+import '../../../core/providers/language_provider.dart';
+import '../../../core/extensions/build_context_extensions.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
   final VoidCallback onTap;
-  final VoidCallback onEdit;
-  final VoidCallback onAddStock;
+  final VoidCallback? onEdit;
+  final VoidCallback? onAddStock;
 
   const ProductCard({
     super.key,
     required this.product,
     required this.onTap,
-    required this.onEdit,
-    required this.onAddStock,
+    this.onEdit,
+    this.onAddStock,
   });
 
   @override
   Widget build(BuildContext context) {
-    final stockStatus = _getStockStatus();
+    final isLowStock = product.tieneStockBajo;
+    final isOutOfStock = product.sinStock;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppSizes.paddingM),
-      elevation: AppSizes.cardElevation,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-        side: BorderSide(
-          color: stockStatus.borderColor,
-          width: stockStatus.hasBorder ? 2 : 0,
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSizes.paddingM),
-          child: Column(
-            children: [
-              Row(
+    return Consumer2<CurrencyProvider, LanguageProvider>(
+      builder: (context, currencyProvider, langProvider, child) {
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: isOutOfStock
+                ? const BorderSide(color: AppColors.error, width: 1)
+                : isLowStock
+                    ? const BorderSide(color: AppColors.warning, width: 1)
+                    : BorderSide.none,
+          ),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
                 children: [
                   // Icono del producto
                   Container(
-                    padding: const EdgeInsets.all(AppSizes.paddingM),
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
-                      color: stockStatus.iconBackgroundColor,
-                      borderRadius: BorderRadius.circular(AppSizes.containerRadius),
+                      color: isOutOfStock
+                          ? AppColors.error.withOpacity(0.1)
+                          : isLowStock
+                              ? AppColors.warning.withOpacity(0.1)
+                              : AppColors.success.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       Icons.inventory_2,
-                      size: AppSizes.iconL,
-                      color: stockStatus.iconColor,
+                      size: 24,
+                      color: isOutOfStock
+                          ? AppColors.error
+                          : isLowStock
+                              ? AppColors.warning
+                              : AppColors.success,
                     ),
                   ),
-                  const SizedBox(width: AppSizes.paddingM),
+                  const SizedBox(width: 12),
 
                   // Información del producto
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                product.nombre,
-                                style: const TextStyle(
-                                  fontSize: AppSizes.textL,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (stockStatus.showBadge)
-                              Container(
-                                margin: const EdgeInsets.only(left: AppSizes.paddingS),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSizes.paddingS,
-                                  vertical: AppSizes.paddingXS,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: stockStatus.badgeColor,
-                                  borderRadius: BorderRadius.circular(AppSizes.containerRadius),
-                                ),
-                                child: Text(
-                                  stockStatus.badgeText,
-                                  style: const TextStyle(
-                                    fontSize: AppSizes.textS,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                          ],
+                        Text(
+                          product.nombre,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: AppSizes.paddingXS),
-                        
-                        // Código y categoría
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.qr_code,
-                              size: AppSizes.iconS,
-                              color: AppColors.textTertiary,
-                            ),
-                            const SizedBox(width: AppSizes.paddingXS),
-                            Text(
-                              product.codigoDisplay,
-                              style: const TextStyle(
-                                fontSize: AppSizes.textS,
-                                color: AppColors.textTertiary,
-                              ),
-                            ),
-                            if (product.categoriaNombre != null) ...[
-                              const SizedBox(width: AppSizes.paddingM),
-                              const Icon(
-                                Icons.category,
-                                size: AppSizes.iconS,
-                                color: AppColors.textTertiary,
-                              ),
-                              const SizedBox(width: AppSizes.paddingXS),
-                              Expanded(
-                                child: Text(
-                                  product.categoriaNombre!,
-                                  style: const TextStyle(
-                                    fontSize: AppSizes.textS,
-                                    color: AppColors.textTertiary,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ],
+                        const SizedBox(height: 4),
+                        Text(
+                          '${langProvider.translate('code')}: ${product.codigoDisplay}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
-                        const SizedBox(height: AppSizes.paddingS),
-                        
-                        // Stock y precio
+                        const SizedBox(height: 4),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  stockStatus.stockIcon,
-                                  size: AppSizes.iconM,
-                                  color: stockStatus.stockColor,
-                                ),
-                                const SizedBox(width: AppSizes.paddingXS),
-                                Text(
-                                  'Stock: ${product.stockActualSafe} ${product.unidadMedidaDisplay}',
-                                  style: TextStyle(
-                                    fontSize: AppSizes.textM,
-                                    color: stockStatus.stockColor,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
                             Text(
-                              NumberFormat.currency(
-                                locale: 'es_CO',
-                                symbol: '\$',
-                              ).format(product.precioVenta),
+                              '${langProvider.translate('stock')}: ${product.stockActualSafe} ${product.unidadMedidaDisplay}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: isOutOfStock
+                                    ? AppColors.error
+                                    : isLowStock
+                                        ? AppColors.warning
+                                        : AppColors.success,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              currencyProvider.formatPriceShort(product.precioVenta),
                               style: const TextStyle(
-                                fontSize: AppSizes.textL,
-                                color: AppColors.success,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                           ],
@@ -179,144 +123,52 @@ class ProductCard extends StatelessWidget {
                       ],
                     ),
                   ),
+
+                  // Acciones
+                  if (onEdit != null || onAddStock != null)
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'edit':
+                            onEdit?.call();
+                            break;
+                          case 'add_stock':
+                            onAddStock?.call();
+                            break;
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        if (onEdit != null)
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.edit, size: 18),
+                                const SizedBox(width: 8),
+                                Text(langProvider.translate('edit')),
+                              ],
+                            ),
+                          ),
+                        if (onAddStock != null)
+                          PopupMenuItem(
+                            value: 'add_stock',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.add_box, size: 18),
+                                const SizedBox(width: 8),
+                                Text(langProvider.translate('add_stock')),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
                 ],
-              ),
-              
-              // Acciones rápidas
-              const Divider(height: AppSizes.paddingL),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _QuickAction(
-                    icon: Icons.visibility,
-                    label: 'Ver',
-                    onTap: onTap,
-                    color: AppColors.primary,
-                  ),
-                  _QuickAction(
-                    icon: Icons.edit,
-                    label: 'Editar',
-                    onTap: onEdit,
-                    color: AppColors.accent,
-                  ),
-                  _QuickAction(
-                    icon: Icons.add_box,
-                    label: 'Stock',
-                    onTap: onAddStock,
-                    color: AppColors.success,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  _StockStatus _getStockStatus() {
-    if (product.stockActualSafe == 0) {
-      return _StockStatus(
-        iconColor: AppColors.error,
-        iconBackgroundColor: AppColors.error.withOpacity(0.1),
-        borderColor: AppColors.error,
-        hasBorder: true,
-        stockColor: AppColors.error,
-        stockIcon: Icons.remove_circle,
-        showBadge: true,
-        badgeColor: AppColors.error,
-        badgeText: 'Sin Stock',
-      );
-    } else if (product.tieneStockBajo) {
-      return _StockStatus(
-        iconColor: AppColors.warning,
-        iconBackgroundColor: AppColors.warning.withOpacity(0.1),
-        borderColor: AppColors.warning,
-        hasBorder: true,
-        stockColor: AppColors.warning,
-        stockIcon: Icons.warning,
-        showBadge: true,
-        badgeColor: AppColors.warning,
-        badgeText: 'Stock Bajo',
-      );
-    } else {
-      return _StockStatus(
-        iconColor: AppColors.primary,
-        iconBackgroundColor: AppColors.primary.withOpacity(0.1),
-        borderColor: Colors.transparent,
-        hasBorder: false,
-        stockColor: AppColors.success,
-        stockIcon: Icons.check_circle,
-        showBadge: false,
-        badgeColor: Colors.transparent,
-        badgeText: '',
-      );
-    }
-  }
-}
-
-class _StockStatus {
-  final Color iconColor;
-  final Color iconBackgroundColor;
-  final Color borderColor;
-  final bool hasBorder;
-  final Color stockColor;
-  final IconData stockIcon;
-  final bool showBadge;
-  final Color badgeColor;
-  final String badgeText;
-
-  _StockStatus({
-    required this.iconColor,
-    required this.iconBackgroundColor,
-    required this.borderColor,
-    required this.hasBorder,
-    required this.stockColor,
-    required this.stockIcon,
-    required this.showBadge,
-    required this.badgeColor,
-    required this.badgeText,
-  });
-}
-
-class _QuickAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Color color;
-
-  const _QuickAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppSizes.containerRadius),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSizes.paddingM,
-          vertical: AppSizes.paddingS,
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: AppSizes.iconM),
-            const SizedBox(height: AppSizes.paddingXS),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: AppSizes.textS,
-                color: color,
-                fontWeight: FontWeight.w600,
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
